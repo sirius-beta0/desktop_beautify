@@ -1,0 +1,114 @@
+# ============================================
+# AI 记忆与工作区数据（不进仓库）
+# ============================================
+.workbuddy/
+
+# ============================================
+# 项目文档（仅本地保留，不进仓库）
+# ============================================
+docs/
+
+# ============================================
+# .NET / Visual Studio / Rider
+# ============================================
+# 构建输出
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+[Ll]og/
+[Ll]ogs/
+artifacts/
+bld/
+x64/
+x86/
+[Ww][Ii][Nn]32/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+
+# 用户特定文件
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.userprefs
+
+# IDE 缓存与配置
+.vs/
+.vscode/
+.idea/
+*.sln.iml
+*.VC.db
+*.VC.VC.opendb
+
+# 编译中间产物
+*.dll
+*.exe
+*.pdb
+*.cache
+*.ilk
+*.obj
+*.iobj
+*.ipdb
+*.pch
+*.tlb
+*.tli
+*.tlh
+*.tmp
+*.tmp_proj
+*_wpftmp.csproj
+*.vspscc
+*.vssscc
+*.svclog
+*.scc
+
+# NuGet
+*.nupkg
+*.snupkg
+**/[Pp]ackages/*
+!**/[Pp]ackages/build/
+*.nuget.props
+*.nuget.targets
+
+# 测试与覆盖率
+[Tt]est[Rr]esult*/
+[Bb]uild[Ll]og.*
+*.trx
+*.coverage
+*.coveragexml
+coverage*.json
+coverage*.xml
+
+# ============================================
+# 文档与办公文件
+# ============================================
+*.doc
+*.docx
+*.docm
+*.xls
+*.xlsx
+*.ppt
+*.pptx
+*.pdf
+*.rtf
+~$*
+
+# ============================================
+# 操作系统
+# ============================================
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+
+# ============================================
+# 其他
+# ============================================
+*.log
+.env
+*.local
