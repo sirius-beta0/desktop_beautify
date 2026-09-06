@@ -2,6 +2,7 @@ using System.Drawing;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Forms;
+using Launcher.Core.Favorites;
 using Launcher.Core.Indexing;
 using Launcher.Core.Platform;
 using Launcher.UI;
@@ -16,6 +17,7 @@ public partial class App : Application
     private PanelWindow? _panel;
     private NotifyIcon? _tray;
     private PanelViewModel? _vm;
+    private AppIndexer? _indexer;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -33,7 +35,8 @@ public partial class App : Application
             return;
         }
 
-        _vm    = new PanelViewModel();
+        _indexer = new AppIndexer();
+        _vm    = new PanelViewModel(new FavoriteStore());
         _panel = new PanelWindow { ViewModel = _vm };
         _tray  = BuildTray();
         _pipeServer = new InstancePipeServer(TogglePanel);
@@ -41,17 +44,26 @@ public partial class App : Application
         // 首启动直接展示一次面板；后续通过 IPC 或托盘切换
         TogglePanel();
 
-        // 后台扫描，不阻塞 UI
+        // 先尝试缓存秒开（冷启动不转圈），再后台全量扫描刷新
+        var cached = _indexer.LoadCache();
+        if (cached is not null)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                _vm.SetApps(cached);
+                _panel?.RefreshEmptyState();
+            });
+        }
+
         _ = ScanAppsAsync();
     }
 
     private async Task ScanAppsAsync()
     {
-        if (_vm is null) return;
-        var scanner = new StartMenuScanner();
+        if (_vm is null || _indexer is null) return;
         try
         {
-            var apps = await scanner.ScanAsync();
+            var apps = await _indexer.BuildAsync();
             // 切回 UI 线程写集合（ObservableCollection 非线程安全）
             await Dispatcher.InvokeAsync(() =>
             {

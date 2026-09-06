@@ -39,7 +39,14 @@ public static class IconExtractor
         if (Cache.TryGetValue(id, out var cached))
             return cached;
 
-        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            Cache[id] = null;
+            return null;
+        }
+
+        // UWP 图标路径是 shell: 命名空间（如 shell:appsFolder\<AUMID>），不走文件存在性检查
+        if (!path.StartsWith("shell:", StringComparison.OrdinalIgnoreCase) && !File.Exists(path))
         {
             Cache[id] = null;
             return null;
