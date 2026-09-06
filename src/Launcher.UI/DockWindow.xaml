@@ -22,15 +22,44 @@
         <!-- 单个收藏图标：32×32 圆形裁剪，悬浮由代码放大到 48×48 -->
         <DataTemplate x:Key="DockIconTemplate" DataType="{x:Type core:AppEntry}">
             <Grid Width="32" Height="32" Margin="5,6" Cursor="Hand" Tag="DockIcon"
+                  Background="Transparent"
                   RenderTransformOrigin="0.5,0.5"
-                  MouseLeftButtonUp="OnDockAppLaunch"
-                  MouseEnter="OnDockIconEnter" MouseLeave="OnDockIconLeave">
+                  MouseLeftButtonUp="OnDockAppLaunch">
                 <Grid.RenderTransform>
                     <ScaleTransform ScaleX="1" ScaleY="1"/>
                 </Grid.RenderTransform>
+                <!-- 悬浮放大：用 IsMouseOver 属性触发器（纯 WPF 属性系统），
+                     不依赖 DataTemplate 内路由事件处理器的解析，规避 MouseEnter 静默失效。 -->
+                <Grid.Style>
+                    <Style TargetType="Grid">
+                        <Style.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetProperty="RenderTransform.(ScaleTransform.ScaleX)" To="1.5" Duration="0:0:0.12"/>
+                                            <DoubleAnimation Storyboard.TargetProperty="RenderTransform.(ScaleTransform.ScaleY)" To="1.5" Duration="0:0:0.12"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetProperty="RenderTransform.(ScaleTransform.ScaleX)" To="1" Duration="0:0:0.12"/>
+                                            <DoubleAnimation Storyboard.TargetProperty="RenderTransform.(ScaleTransform.ScaleY)" To="1" Duration="0:0:0.12"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
+                            </Trigger>
+                        </Style.Triggers>
+                    </Style>
+                </Grid.Style>
+                <!-- 白色圆形底衬：保证所有图标（含透明/方形图标）视觉上都是统一的圆形白底 -->
+                <Ellipse Width="32" Height="32" Fill="White" IsHitTestVisible="False"/>
                 <Image Width="32" Height="32" Stretch="Uniform"
                        RenderOptions.BitmapScalingMode="HighQuality"
-                       Loaded="OnDockIconLoaded">
+                       Loaded="OnDockIconLoaded"
+                       IsHitTestVisible="False">
                     <Image.Clip>
                         <EllipseGeometry Center="16,16" RadiusX="15.5" RadiusY="15.5"/>
                     </Image.Clip>
@@ -45,12 +74,11 @@
         </DataTemplate>
     </Window.Resources>
 
-    <!-- 长条背景：半透明圆角卡片 + 阴影；整条可拖动（图标与中心按钮除外） -->
-    <Border x:Name="Bar" CornerRadius="18" Background="#F2F2F2F2"
-            BorderBrush="#E0E0E0" BorderThickness="1" Padding="8,6">
-        <Border.Effect>
-            <DropShadowEffect BlurRadius="18" ShadowDepth="0" Opacity="0.20" Color="Black"/>
-        </Border.Effect>
+    <!-- 长条背景：半透明圆角卡片。注意：透明窗体(AllowsTransparency)上挂 DropShadowEffect
+         会在子元素做 RenderTransform 缩放动画时偶发让渲染线程抛 NullReferenceException 而崩溃，
+         故此处不用 Effect，改用底色+描边模拟悬浮感（更稳）。 -->
+    <Border x:Name="Bar" CornerRadius="18" Background="#F4F4F4F4"
+            BorderBrush="#CFCFCF" BorderThickness="1" Padding="8,6">
         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
             <!-- 中心按钮左侧：奇数索引，FlowDirection=RTL 使 fav[1] 紧贴中心按钮 -->
             <ItemsControl ItemsSource="{Binding DockLeft}" ItemTemplate="{StaticResource DockIconTemplate}">
@@ -63,10 +91,39 @@
 
             <!-- 中心呼出按钮：点击切换应用搜索面板（从 Dock 上方弹出） -->
             <Button x:Name="CenterButton" Width="34" Height="34" Margin="6,0" Cursor="Hand"
+                    PreviewMouseDown="OnCenterButtonPreviewDown"
                     Click="OnCenterButtonClick">
                 <Button.Template>
                     <ControlTemplate TargetType="Button">
-                        <Grid>
+                        <Grid RenderTransformOrigin="0.5,0.5">
+                            <Grid.RenderTransform>
+                                <ScaleTransform ScaleX="1" ScaleY="1"/>
+                            </Grid.RenderTransform>
+                            <!-- 悬浮放大：与 Dock 图标完全一致的 IsMouseOver 属性触发器（纯 WPF 属性系统） -->
+                            <Grid.Style>
+                                <Style TargetType="Grid">
+                                    <Style.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Trigger.EnterActions>
+                                                <BeginStoryboard>
+                                                    <Storyboard>
+                                                        <DoubleAnimation Storyboard.TargetProperty="RenderTransform.(ScaleTransform.ScaleX)" To="1.5" Duration="0:0:0.12"/>
+                                                        <DoubleAnimation Storyboard.TargetProperty="RenderTransform.(ScaleTransform.ScaleY)" To="1.5" Duration="0:0:0.12"/>
+                                                    </Storyboard>
+                                                </BeginStoryboard>
+                                            </Trigger.EnterActions>
+                                            <Trigger.ExitActions>
+                                                <BeginStoryboard>
+                                                    <Storyboard>
+                                                        <DoubleAnimation Storyboard.TargetProperty="RenderTransform.(ScaleTransform.ScaleX)" To="1" Duration="0:0:0.12"/>
+                                                        <DoubleAnimation Storyboard.TargetProperty="RenderTransform.(ScaleTransform.ScaleY)" To="1" Duration="0:0:0.12"/>
+                                                    </Storyboard>
+                                                </BeginStoryboard>
+                                            </Trigger.ExitActions>
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Grid.Style>
                             <Ellipse Fill="#3B6BB5" Stroke="#FFFFFF" StrokeThickness="1.5"/>
                             <Path Data="M5,5 L11,11 M11,5 L5,11" Stroke="White" StrokeThickness="2"
                                   StrokeEndLineCap="Round" Width="16" Height="16"

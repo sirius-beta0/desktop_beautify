@@ -543,13 +543,12 @@ public partial class PanelWindow : Window
     }
 
     /// <summary>
-    /// 面板失焦即隐藏，但显示后的极短时间内忽略 Deactivated，
-    /// 避免 Show/Activate 过程中系统瞬间切走焦点导致误关闭。
+    /// 面板失焦不再自动隐藏。开合完全由 Dock 中心按钮 / Esc / 点击启动统一控制，
+    /// 从根本上消除“点中心按钮→面板失焦先 Hide→按钮 Click 又 Show”导致无法收起的竞态。
+    /// （设计取舍：点击桌面/其它窗口不再自动收起面板，需再点中心按钮或按 Esc 关闭。）
     /// </summary>
     private void OnDeactivated(object? sender, EventArgs e)
     {
-        if (DateTime.Now - _shownAt < TimeSpan.FromMilliseconds(200)) return;
         if (_favoriteDragInProgress) CancelPress(); // 拖拽中失焦：先取消，避免占位卡/鼠标捕获残留
-        HidePanel();
     }
 }

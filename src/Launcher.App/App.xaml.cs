@@ -22,6 +22,7 @@ public partial class App : Application
 
     protected override void OnStartup(StartupEventArgs e)
     {
+        AttachCrashLogging();
         base.OnStartup(e);
 
         // 单实例
@@ -126,5 +127,42 @@ public partial class App : Application
         _pipeServer?.Dispose();
         _mutex?.Dispose();
         base.OnExit(e);
+    }
+
+    // ---- 全局未处理异常捕获：把真实堆栈落到 crash.log，便于无调试环境下定位崩溃 ----
+    // WER 报 0xe0434352 只能说明是 .NET 托管异常，拿不到托管栈；这里兜底记录。
+
+    private static string CrashLogPath =>
+        System.IO.Path.Combine(
+            System.IO.Path.GetDirectoryName(System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName)
+                ?? ".",
+            "crash.log");
+
+    private void AttachCrashLogging()
+    {
+        // UI 线程异常：记录并保活，避免单次异常直接退出进程
+        DispatcherUnhandledException += (_, e) =>
+        {
+            WriteCrash(e.Exception, "DispatcherUnhandledException");
+            e.Handled = true;
+        };
+        AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+            WriteCrash(e.ExceptionObject as Exception, "AppDomain.UnhandledException");
+    }
+
+    private static void WriteCrash(Exception? ex, string where)
+    {
+        try
+        {
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] {where}");
+            sb.AppendLine(ex?.ToString() ?? "(null exception)");
+            sb.AppendLine(new string('-', 60));
+            System.IO.File.AppendAllText(CrashLogPath, sb.ToString());
+        }
+        catch
+        {
+            // 日志记录本身失败则忽略，不要因日志二次崩溃
+        }
     }
 }

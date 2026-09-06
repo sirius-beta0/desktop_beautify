@@ -21,6 +21,13 @@ public partial class DockWindow : Window
     private bool _dragging;
     private Point _dragStart;
 
+    /// <summary>
+    /// 中心按钮即将切换面板的待定标记。在按钮 PreviewMouseDown（早于面板失焦）置位，
+    /// 供 PanelWindow.OnDeactivated 判断是否“因点击中心按钮而失焦”，从而跳过自动隐藏、
+    /// 把开合完全交给中心按钮。每次切换结束后清零，避免误伤真实的外点收起。
+    /// </summary>
+    internal static bool CenterTogglePending;
+
     /// <summary>由 App 注入的搜索面板，用于中心按钮唤起。</summary>
     public PanelWindow? Panel { get; set; }
 
@@ -58,6 +65,7 @@ public partial class DockWindow : Window
     private void OnCenterButtonClick(object sender, RoutedEventArgs e)
     {
         if (Panel is null) return;
+        CenterTogglePending = false; // 切换结束，清除待定标记（防残留导致外点不收起）
         if (Panel.IsVisible) { Panel.HidePanel(); return; }
         ShowPanelAbove();
     }
@@ -67,10 +75,10 @@ public partial class DockWindow : Window
         if (Panel is null) return;
         var src = PresentationSource.FromVisual(this);
         var dpm = src?.CompositionTarget?.TransformToDevice ?? Matrix.Identity;
-        // 中心按钮中心点的屏幕物理坐标 → 转 WPF 逻辑坐标，作为面板锚点
-        var btnCenterInWindow = CenterButton.TransformToVisual(this)
-            .Transform(new Point(CenterButton.ActualWidth / 2, CenterButton.ActualHeight / 2));
-        var screenPhys = PointToScreen(btnCenterInWindow);
+        // 以中心按钮“顶部中心”为锚点（而非中心点），使面板底边悬于按钮正上方、无重叠
+        var btnAnchorInWindow = CenterButton.TransformToVisual(this)
+            .Transform(new Point(CenterButton.ActualWidth / 2, 0));
+        var screenPhys = PointToScreen(btnAnchorInWindow);
         var logicalX = screenPhys.X / dpm.M11;
         var logicalY = screenPhys.Y / dpm.M22;
         Panel.PositionAbove(logicalX, logicalY);
@@ -84,7 +92,11 @@ public partial class DockWindow : Window
     {
         if (e.ChangedButton != MouseButton.Left) return;
         if (HitTag(e.OriginalSource as DependencyObject, "DockIcon")) return;       // 图标：交给启动
-        if (FindAncestor<Button>(e.OriginalSource as DependencyObject) is not null) return; // 按钮：交给切换
+        if (FindAncestor<Button>(e.OriginalSource as DependencyObject) is not null)
+        {
+            CenterTogglePending = true; // 中心按钮即将切换，标记待定（Panel 失焦时据此跳过自动隐藏）
+            return;                      // 按钮：交给切换
+        }
         _dragging = true;
         _dragStart = e.GetPosition(this);
     }
@@ -113,17 +125,8 @@ public partial class DockWindow : Window
 
     // ---- 图标：悬浮放大、点击启动、异步图标提取 ----
 
-    private void OnDockIconEnter(object sender, MouseEventArgs e) => AnimateScale(sender as Grid, 1.5);
-    private void OnDockIconLeave(object sender, MouseEventArgs e) => AnimateScale(sender as Grid, 1.0);
-
-    private static void AnimateScale(Grid? g, double to)
-    {
-        if (g is null) return;
-        var st = g.RenderTransform as ScaleTransform ?? new ScaleTransform(1, 1);
-        g.RenderTransform = st;
-        st.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(to, TimeSpan.FromMilliseconds(120)));
-        st.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(to, TimeSpan.FromMilliseconds(120)));
-    }
+    // 悬浮放大改由 DockIconTemplate 的 XAML IsMouseOver 触发器实现（纯属性系统，
+    // 不依赖 DataTemplate 内的路由事件处理器解析，规避此前 MouseEnter 静默失效的问题）。
 
     private void OnDockIconLoaded(object sender, RoutedEventArgs e)
     {
@@ -156,6 +159,11 @@ public partial class DockWindow : Window
     }
 
     // ---- 视觉树辅助 ----
+
+    // 中心按钮自身 PreviewMouseDown：必置位切换待定标记（比窗口级隧道+FindAncestor 更可靠），
+    // 供 PanelWindow.OnDeactivated 判断是否因点中心按钮而失焦，从而跳过自动隐藏。
+    private void OnCenterButtonPreviewDown(object sender, MouseButtonEventArgs e)
+        => CenterTogglePending = true;
 
     private static bool HitTag(DependencyObject? o, object tag)
     {
