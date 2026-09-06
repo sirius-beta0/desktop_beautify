@@ -57,12 +57,13 @@ public partial class App : Application
         _indexer = new AppIndexer();
         _vm    = new PanelViewModel(new FavoriteStore());
         _panel = new PanelWindow { ViewModel = _vm };
-        _panel.PanelAnchor = _settings.PanelPosition;   // 面板弹出位置（左下角 / 居中）
+        _panel.PanelAnchor = _settings.PanelPosition;   // 面板弹出位置（左下角 / 居中 / Dock 上方）
         _tray  = BuildTray();
         _pipeServer = new InstancePipeServer(OnPipeMessage);
 
         // Dock 栏常驻桌面：作为应用搜索面板的主入口；面板默认隐藏，由 Dock 中心按钮唤起
         _dock = new DockWindow { ViewModel = _vm, Panel = _panel };
+        _panel.Dock = _dock;                        // 供「Dock 上方」弹出位置计算锚点
         _dock.HotkeyPressed = RequestTogglePanel;   // 全局热键 → 切换面板
         _dock.Show();
         if (!_settings.ShowDock) _dock.Hide();       // 设置关 Dock：初始即隐藏（热键 / 托盘仍可唤起面板）

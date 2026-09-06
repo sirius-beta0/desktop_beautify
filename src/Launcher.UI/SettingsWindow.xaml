@@ -73,8 +73,10 @@
                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
                         <RadioButton Content="左下角" Margin="0,0,14,0"
                                      IsChecked="{Binding PanelPosition, Converter={StaticResource EnumToBoolConv}, ConverterParameter=BottomLeft}"/>
-                        <RadioButton Content="居中"
+                        <RadioButton Content="居中" Margin="0,0,14,0"
                                      IsChecked="{Binding PanelPosition, Converter={StaticResource EnumToBoolConv}, ConverterParameter=Center}"/>
+                        <RadioButton Content="Dock 上方"
+                                     IsChecked="{Binding PanelPosition, Converter={StaticResource EnumToBoolConv}, ConverterParameter=DockAbove}"/>
                     </StackPanel>
                 </DockPanel>
 

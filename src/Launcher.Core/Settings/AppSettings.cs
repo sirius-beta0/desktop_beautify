@@ -13,6 +13,8 @@ public enum PanelPosition
     BottomLeft,
     /// <summary>屏幕底部水平居中。</summary>
     Center,
+    /// <summary>Dock 栏正上方（以中心按钮为锚点）。</summary>
+    DockAbove,
 }
 
 /// <summary>

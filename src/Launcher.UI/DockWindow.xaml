@@ -179,17 +179,18 @@
                                     </Style.Triggers>
                                 </Style>
                             </Grid.Style>
-                            <Ellipse Fill="#3B6BB5" Stroke="#FFFFFF" StrokeThickness="1.5"/>
-                            <!-- 中心按钮自定义图标：设置 DockCenterIconPath 后显示，隐藏默认 X -->
-                            <Image Source="{Binding DockCenterIconPath, Source={StaticResource AppSettings}, Converter={StaticResource PathToImageConv}}"
-                                   Width="22" Height="22" Stretch="Uniform"
+                            <!-- 默认 logo：无自定义图标时显示；与程序图标为同一设计 -->
+                            <Image Source="pack://application:,,,/Launcher.UI;component/Assets/logo.png"
+                                   Width="26" Height="26" Stretch="Uniform"
                                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   RenderOptions.BitmapScalingMode="HighQuality"
+                                   Visibility="{Binding DockCenterIconPath, Source={StaticResource AppSettings}, Converter={StaticResource NotNullToVisibilityConv}}"/>
+                            <!-- 自定义图标：设置后显示，原蓝底按钮已去除 -->
+                            <Image Source="{Binding DockCenterIconPath, Source={StaticResource AppSettings}, Converter={StaticResource PathToImageConv}}"
+                                   Width="26" Height="26" Stretch="Uniform"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   RenderOptions.BitmapScalingMode="HighQuality"
                                    Visibility="{Binding DockCenterIconPath, Source={StaticResource AppSettings}, Converter={StaticResource NullToVisibilityConv}}"/>
-                            <!-- 默认 X 图标：无自定义图标时显示 -->
-                            <Path Data="M5,5 L11,11 M11,5 L5,11" Stroke="White" StrokeThickness="2"
-                                  StrokeEndLineCap="Round" Width="16" Height="16"
-                                  HorizontalAlignment="Center" VerticalAlignment="Center"
-                                  Visibility="{Binding DockCenterIconPath, Source={StaticResource AppSettings}, Converter={StaticResource NotNullToVisibilityConv}}"/>
                         </Grid>
                     </ControlTemplate>
                 </Button.Template>

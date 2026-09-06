@@ -53,6 +53,9 @@ public partial class PanelWindow : Window
     /// <summary>面板从任务栏 / 热键唤起时的弹出位置（由设置注入；Dock 中心按钮唤起始终走 Dock 锚定）。</summary>
     public PanelPosition PanelAnchor { get; set; } = PanelPosition.BottomLeft;
 
+    /// <summary>Dock 窗口；「Dock 上方」弹出位置需要用它计算锚点。</summary>
+    public DockWindow? Dock { get; set; }
+
     public PanelWindow()
     {
         InitializeComponent();
@@ -581,12 +584,17 @@ public partial class PanelWindow : Window
         Top = top;
     }
 
-    /// <summary>按设置（左下角贴任务栏 / 屏幕底部居中）定位由任务栏或热键唤起的面板。</summary>
+    /// <summary>按设置（左下角贴任务栏 / 屏幕底部居中 / Dock 栏上方）定位由任务栏或热键唤起的面板。</summary>
     private void PlaceForAnchor(TaskbarInfo info)
     {
         if (PanelAnchor == PanelPosition.Center)
         {
             PositionCenter();
+        }
+        else if (PanelAnchor == PanelPosition.DockAbove && Dock?.Visibility == Visibility.Visible)
+        {
+            var (ax, ay) = Dock.GetCenterButtonAnchorLogical();
+            PositionAbove(ax, ay);
         }
         else
         {

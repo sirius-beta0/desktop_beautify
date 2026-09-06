@@ -143,17 +143,21 @@ public partial class DockWindow : Window
         else ShowPanelAbove();
     }
 
-    private void ShowPanelAbove()
+    /// <summary>取中心按钮“顶部中心”的 WPF 逻辑坐标，供面板从 Dock 上方弹出时定位。</summary>
+    public (double X, double Y) GetCenterButtonAnchorLogical()
     {
-        if (Panel is null) return;
         var src = PresentationSource.FromVisual(this);
         var dpm = src?.CompositionTarget?.TransformToDevice ?? Matrix.Identity;
-        // 以中心按钮“顶部中心”为锚点（而非中心点），使面板底边悬于按钮正上方、无重叠
         var btnAnchorInWindow = CenterButton.TransformToVisual(this)
             .Transform(new Point(CenterButton.ActualWidth / 2, 0));
         var screenPhys = PointToScreen(btnAnchorInWindow);
-        var logicalX = screenPhys.X / dpm.M11;
-        var logicalY = screenPhys.Y / dpm.M22;
+        return (screenPhys.X / dpm.M11, screenPhys.Y / dpm.M22);
+    }
+
+    private void ShowPanelAbove()
+    {
+        if (Panel is null) return;
+        var (logicalX, logicalY) = GetCenterButtonAnchorLogical();
         Panel.PositionAbove(logicalX, logicalY);  // 先用 Measure 估算高度定位
         Panel.Show();
         Panel.UpdateLayout();                     // 强制布局：ActualHeight 此刻为真实渲染高度

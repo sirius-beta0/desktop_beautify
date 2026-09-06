@@ -27,9 +27,12 @@ public partial class SettingsWindow : Window
             Filter = "图片文件|*.png;*.jpg;*.jpeg;*.bmp;*.ico|所有文件|*.*",
             CheckFileExists = true,
         };
-        if (dlg.ShowDialog(this) == true)
+        if (dlg.ShowDialog(this) != true) return;
+
+        var crop = new IconCropWindow(dlg.FileName);
+        if (crop.ShowDialog() == true && crop.OutputPath is not null)
         {
-            _settings.DockCenterIconPath = dlg.FileName;
+            _settings.DockCenterIconPath = crop.OutputPath;
         }
     }
 
