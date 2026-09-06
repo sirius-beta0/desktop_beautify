@@ -4,7 +4,7 @@
         xmlns:core="clr-namespace:Launcher.Core.Indexing;assembly=Launcher.Core"
         xmlns:local="clr-namespace:Launcher.UI"
         xmlns:conv="clr-namespace:Launcher.UI.Converters"
-        Width="572" Height="560"
+        Width="572" Height="608"
         WindowStyle="None" ResizeMode="NoResize"
         AllowsTransparency="True" Background="Transparent"
         ShowInTaskbar="False"
@@ -16,12 +16,22 @@
 
     <Window.Resources>
         <conv:FirstCharConverter x:Key="FirstCharConverter"/>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
         <DataTemplate x:Key="AppItemTemplate" DataType="{x:Type core:AppEntry}">
             <!-- 方型磁贴卡片：图标完全居中，名称置于底部，悬浮整卡加深 -->
             <Grid Width="128" Height="128" Margin="0" Cursor="Hand"
                   MouseLeftButtonUp="OnAppLaunch">
+                <Grid.ContextMenu>
+                    <ContextMenu Opened="OnCardContextMenuOpened">
+                        <MenuItem Header="收藏" Click="OnToggleFavoriteMenu"/>
+                        <MenuItem Header="移除失效收藏" Click="OnToggleFavoriteMenu" Visibility="Collapsed"/>
+                    </ContextMenu>
+                </Grid.ContextMenu>
+                <!-- 占位卡背景：仅拖拽占位时显示（虚线空卡） -->
+                <Border x:Name="PhBorder" Visibility="Collapsed"
+                        BorderBrush="#BFBFBF" BorderThickness="2" Background="#ECECEC"/>
                 <!-- 图标在卡片内上下左右完全居中 -->
-                <Grid HorizontalAlignment="Center" VerticalAlignment="Center"
+                <Grid x:Name="IconGrid" HorizontalAlignment="Center" VerticalAlignment="Center"
                       Width="48" Height="48">
                     <!-- 占位：图标未加载（异步/失败）时显示首字母；透明底，加载成功后由代码隐藏 -->
                     <Border Tag="Placeholder">
@@ -37,13 +47,13 @@
                            HorizontalAlignment="Center" VerticalAlignment="Center"/>
                 </Grid>
                 <!-- 名称置于卡片底部 -->
-                <TextBlock Text="{Binding Name}"
+                <TextBlock x:Name="NameText" Text="{Binding Name}"
                            HorizontalAlignment="Center" VerticalAlignment="Bottom"
                            Margin="0,0,0,12" FontSize="11" Foreground="#333"
                            TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"
                            MaxWidth="120" ToolTip="{Binding Name}"/>
                 <!-- 悬浮加深层：覆盖整张卡片（方型无圆角），hover 时整卡加深 -->
-                <Border>
+                <Border x:Name="HoverBorder">
                     <Border.Style>
                         <Style TargetType="Border">
                             <Setter Property="Background" Value="Transparent"/>
@@ -56,18 +66,30 @@
                     </Border.Style>
                 </Border>
             </Grid>
+            <DataTemplate.Triggers>
+                <!-- 拖拽占位卡：显示虚线空卡，隐藏图标/名称/悬浮层 -->
+                <DataTrigger Binding="{Binding IsPlaceholder}" Value="True">
+                    <Setter TargetName="PhBorder" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="IconGrid" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="NameText" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="HoverBorder" Property="Visibility" Value="Collapsed"/>
+                </DataTrigger>
+            </DataTemplate.Triggers>
         </DataTemplate>
     </Window.Resources>
 
 
     <Border x:Name="Shell"
             Margin="8" CornerRadius="12"
-            Background="#F2F2F2F2" BorderBrush="#E0E0E0" BorderThickness="1">
+            Background="#F2F2F2F2" BorderBrush="#E0E0E0" BorderThickness="1"
+            PreviewMouseMove="OnFavoriteDragMove"
+            PreviewMouseLeftButtonUp="OnFavoritePressEnd">
         <Border.Effect>
             <DropShadowEffect BlurRadius="24" ShadowDepth="0" Opacity="0.18" Color="Black"/>
         </Border.Effect>
 
-        <Grid Margin="12">
+        <Grid>
+            <Grid Margin="12">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
@@ -95,32 +117,53 @@
                 </Grid>
             </Border>
 
-            <Grid Grid.Row="1" Margin="0,12,0,0"
-                  x:Name="ContentHost">
+            <Grid Grid.Row="1" Margin="0,12,0,0">
+                <ScrollViewer x:Name="ContentScroll"
+                              Height="512"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel>
+                        <!-- 收藏区：置顶，与下方普通列表隔离；搜索时由 VM 控制隐藏 -->
+                        <StackPanel x:Name="FavoritesGroup"
+                                    Visibility="{Binding ShowFavorites, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="已收藏"
+                                       FontSize="12" Foreground="#888"
+                                       Margin="4,0,0,6"/>
+                            <ItemsControl x:Name="FavoritesGrid"
+                                          ItemsSource="{Binding Favorites}"
+                                          ItemTemplate="{StaticResource AppItemTemplate}"
+                                          PreviewMouseLeftButtonDown="OnFavoriteDragStart">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel Orientation="Horizontal"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                            </ItemsControl>
+                            <!-- 收藏区与普通列表的分隔线（在收藏网格下方） -->
+                            <Rectangle Height="1" Fill="#E0E0E0" Margin="0,8,0,4"/>
+                        </StackPanel>
+                        <!-- 普通区：无搜索=未收藏项；有搜索=全部匹配项 -->
+                        <ItemsControl x:Name="MainGrid"
+                                      ItemsSource="{Binding Main}"
+                                      ItemTemplate="{StaticResource AppItemTemplate}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel Orientation="Horizontal"/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
+                    </StackPanel>
+                </ScrollViewer>
                 <TextBlock x:Name="EmptyHint"
                            Text="正在索引已安装应用…"
                            HorizontalAlignment="Center" VerticalAlignment="Center"
                            TextWrapping="Wrap"
                            Foreground="#888" FontSize="13"/>
-                <ItemsControl x:Name="AppGrid"
-                              ItemsSource="{Binding AppsView}"
-                              ItemTemplate="{StaticResource AppItemTemplate}"
-                              Visibility="Collapsed">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <WrapPanel Orientation="Horizontal"/>
-                        </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                    <ItemsControl.Template>
-                        <ControlTemplate TargetType="ItemsControl">
-                            <ScrollViewer VerticalScrollBarVisibility="Auto"
-                                          HorizontalScrollBarVisibility="Disabled">
-                                <ItemsPresenter/>
-                            </ScrollViewer>
-                        </ControlTemplate>
-                    </ItemsControl.Template>
-                </ItemsControl>
             </Grid>
+            </Grid>
+            <!-- 拖拽残影图层：覆盖整个面板、不拦截指针，仅用于渲染跟随光标的深色卡片 -->
+            <Canvas x:Name="DragCanvas" IsHitTestVisible="False"
+                    HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
         </Grid>
     </Border>
 </Window>

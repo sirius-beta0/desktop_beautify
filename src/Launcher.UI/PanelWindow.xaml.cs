@@ -1,8 +1,10 @@
 using System.Linq;
 using System.Windows;
+using System.Windows.Threading;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Effects;
 using Launcher.Core;
 using Launcher.Core.Indexing;
 using Launcher.Core.Platform;
@@ -13,6 +15,18 @@ public partial class PanelWindow : Window
 {
     private PanelViewModel? _vm;
     private DateTime _shownAt = DateTime.MinValue;
+
+    // 收藏区拖拽状态（占位卡模型）
+    private AppEntry? _dragApp;
+    private int _dragOriginalIndex = -1;     // 被拖动卡在收藏区的原始索引
+    private readonly AppEntry _placeholder = new() { Id = "__drag_placeholder__", Name = "", IsPlaceholder = true };
+    private Point _favoriteDragStartPoint;   // 按下时的屏幕坐标
+    private Point _grabOffset;               // 光标相对卡片左上角的偏移（DragCanvas 本地坐标）
+    private Border? _dragGhost;              // 拖拽时跟随光标的卡片残影（选中态样式、缩小 40%）
+    private bool _longPressArmed;
+    private bool _favoriteDragInProgress;
+    private bool _justDragged;
+    private readonly DispatcherTimer _pressTimer = new() { Interval = TimeSpan.FromMilliseconds(220) };
 
     public PanelViewModel ViewModel
     {
@@ -30,10 +44,15 @@ public partial class PanelWindow : Window
         InitializeComponent();
         PreviewKeyDown += (_, e) =>
         {
-            if (e.Key == Key.Escape) HidePanel();
+            if (e.Key == Key.Escape)
+            {
+                if (_favoriteDragInProgress) CancelPress();
+                HidePanel();
+            }
         };
         Deactivated += OnDeactivated;
         Loaded += (_, _) => SearchBox.Focus();
+        _pressTimer.Tick += OnLongPressTick;
         UpdatePlaceholder();
     }
 
@@ -57,8 +76,10 @@ public partial class PanelWindow : Window
     {
         if (_vm is null) return;
 
-        var hasItems = _vm.AppsView.Cast<AppEntry>().Any();
-        AppGrid.Visibility = hasItems ? Visibility.Visible : Visibility.Collapsed;
+        var favoritesVisible = _vm.ShowFavorites && _vm.Favorites.Any();
+        var mainHasItems = _vm.Main.Any();
+        var hasItems = favoritesVisible || mainHasItems;
+        MainGrid.Visibility = mainHasItems ? Visibility.Visible : Visibility.Collapsed;
         EmptyHint.Visibility = hasItems ? Visibility.Collapsed : Visibility.Visible;
 
         EmptyHint.Text = _vm.IsIndexing
@@ -68,10 +89,18 @@ public partial class PanelWindow : Window
                 : "未索引到应用（请检查开始菜单目录）";
     }
 
-    /// <summary>网格项单击即启动。M5 再加收藏与回车选择。</summary>
+    /// <summary>网格项单击即启动。拖拽刚结束时跳过，避免误启动。</summary>
     private void OnAppLaunch(object sender, MouseButtonEventArgs e)
     {
+        if (_favoriteDragInProgress || _justDragged)
+        {
+            _favoriteDragInProgress = false;
+            _justDragged = false;
+            ResetAllShrink();
+            return;
+        }
         if (sender is not FrameworkElement fe || fe.DataContext is not AppEntry app) return;
+        if (app.IsPlaceholder) return; // 占位卡不可启动
         AppLauncher.Launch(app);
         HidePanel();
     }
@@ -83,7 +112,12 @@ public partial class PanelWindow : Window
     private async void OnTileLoaded(object sender, RoutedEventArgs e)
     {
         if (sender is not System.Windows.Controls.Image img || img.DataContext is not AppEntry app) return;
-        var icon = await IconExtractor.GetAsync(app.Id, app.TargetPath ?? app.IconPath ?? "").ConfigureAwait(true);
+        if (app.IsPlaceholder) return; // 占位卡不提取图标
+        // UWP 条目用 shell:appsFolder\<AUMID> 提取图标；Win32 用 TargetPath / IconPath
+        var iconKey = app.AppUserModelId is not null
+            ? "shell:appsFolder\\" + app.AppUserModelId
+            : (app.TargetPath ?? app.IconPath ?? "");
+        var icon = await IconExtractor.GetAsync(app.Id, iconKey).ConfigureAwait(true);
         if (img.DataContext != app) return;
         if (icon is null) return;
         img.Source = icon;
@@ -104,6 +138,312 @@ public partial class PanelWindow : Window
             if (nested is not null) return nested;
         }
         return null;
+    }
+
+    // ---- 收藏：右键菜单 / 拖拽排序 ----
+
+    /// <summary>右键菜单打开时，按当前项是否为收藏来设置菜单文案，并仅在失效收藏时显示「移除」。</summary>
+    private void OnCardContextMenuOpened(object sender, RoutedEventArgs e)
+    {
+        if (sender is not ContextMenu menu) return;
+        if (menu.PlacementTarget is not FrameworkElement fe || fe.DataContext is not AppEntry app || _vm is null) return;
+
+        if (menu.Items[0] is MenuItem favItem)
+            favItem.Header = _vm.IsFavorite(app) ? "取消收藏" : "收藏";
+
+        if (menu.Items[1] is MenuItem removeItem)
+            removeItem.Visibility = (!app.IsValid && _vm.IsFavorite(app))
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+    }
+
+    /// <summary>右键菜单「收藏 / 取消收藏 / 移除失效收藏」统一走切换。</summary>
+    private void OnToggleFavoriteMenu(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuItem mi || mi.Parent is not ContextMenu cm) return;
+        if (cm.PlacementTarget is not FrameworkElement fe || fe.DataContext is not AppEntry app) return;
+        _vm?.ToggleFavorite(app);
+        RefreshEmptyState();
+    }
+
+    private void OnFavoriteDragStart(object sender, MouseButtonEventArgs e)
+    {
+        _favoriteDragInProgress = false;
+        _justDragged = false;
+        _longPressArmed = false;
+        _dragApp = null;
+        if (_vm is null) return;
+        // 事件挂在 ItemsControl 上，sender.DataContext 是 ViewModel 而非卡片，
+        // 必须顺着鼠标原始落点往视觉树里找真正的 AppEntry 卡片。
+        var app = FindAppEntryFromSource(e.OriginalSource as DependencyObject);
+        if (app is null) return;
+        if (_vm.Favorites.IndexOf(app) < 0) return;
+        _dragApp = app;
+        _favoriteDragStartPoint = e.GetPosition(null);
+        // 启动长按计时：按住不移动 ~220ms 即进入拖拽态（卡片缩小作为反馈）
+        _pressTimer.Stop();
+        _pressTimer.Start();
+    }
+
+    /// <summary>从鼠标落点向上回溯视觉树，找到 DataContext 为 AppEntry 的卡片。</summary>
+    private static AppEntry? FindAppEntryFromSource(DependencyObject? o)
+    {
+        while (o is not null)
+        {
+            if (o is FrameworkElement fe && fe.DataContext is AppEntry app) return app;
+            o = VisualTreeHelper.GetParent(o);
+        }
+        return null;
+    }
+
+    /// <summary>长按到点：按钮仍按住则进入拖拽态，生成跟随光标的深色卡片残影。</summary>
+    private void OnLongPressTick(object? sender, EventArgs e)
+    {
+        _pressTimer.Stop();
+        if (_dragApp is null) return;
+        if (Mouse.LeftButton != MouseButtonState.Pressed) return;
+        _longPressArmed = true;
+        BeginDrag();
+    }
+
+    private void OnFavoriteDragMove(object sender, MouseEventArgs e)
+    {
+        if (_dragApp is null) return;
+        if (e.LeftButton != MouseButtonState.Pressed) { CancelPress(); return; }
+        var screen = e.GetPosition(null);
+        if (!_favoriteDragInProgress)
+        {
+            var diff = screen - _favoriteDragStartPoint;
+            // 移动超过阈值，或已长按进入拖拽态 → 开始拖拽
+            if (Math.Abs(diff.X) <= 5 && Math.Abs(diff.Y) <= 5 && !_longPressArmed) return;
+            BeginDrag();
+        }
+        if (_favoriteDragInProgress)
+        {
+            MoveGhostTo(screen);
+            UpdateDragReorder(e);
+        }
+    }
+
+    /// <summary>
+    /// 拖拽过程中：找光标下的真实卡片（跳过占位卡），与其做两两交换。
+    /// 不再要求 50% 重叠、也不按中心判断前后——光标一旦进入另一张卡片范围即交换，
+    /// 占位空卡移到该卡原位、该卡补到拖动卡原位；离开卡片则保持上一状态（循环直到松手）。
+    /// </summary>
+    private void UpdateDragReorder(MouseEventArgs e)
+    {
+        if (_vm is null || _dragApp is null) return;
+
+        var pt = e.GetPosition(FavoritesGrid);
+        var hit = FavoritesGrid.InputHitTest(pt) as DependencyObject;
+        AppEntry? targetApp = null;
+        while (hit is not null)
+        {
+            if (hit is FrameworkElement fe && fe.DataContext is AppEntry a && !a.IsPlaceholder) { targetApp = a; break; }
+            hit = VisualTreeHelper.GetParent(hit);
+        }
+        if (targetApp is not null)
+            _vm.SetFavoriteDragTarget(targetApp);
+    }
+
+    /// <summary>拖拽松手：用真实卡替换占位卡并提交顺序；未移动则恢复原位。置 _justDragged 防止误启动。</summary>
+    private void OnFavoritePressEnd(object sender, MouseButtonEventArgs e)
+    {
+        if (_justDragged)
+        {
+            _justDragged = false;
+            _favoriteDragInProgress = false;
+            return;
+        }
+        if (_favoriteDragInProgress)
+        {
+            _favoriteDragInProgress = false;
+            if (_vm is not null)
+                _vm.CommitFavoriteDrag();
+            DestroyGhost();
+            if (Shell.IsMouseCaptured) Shell.ReleaseMouseCapture();
+            _dragApp = null;
+            _dragOriginalIndex = -1;
+            _justDragged = false;   // 关键：吞掉本次 MouseLeftButtonUp，避免冒泡到卡片触发 OnAppLaunch 误启动
+            e.Handled = true;
+            return;
+        }
+        CancelPress();
+    }
+
+    // ---- 拖拽视觉辅助 ----
+
+    /// <summary>进入拖拽态：从收藏区移除被拖动卡（原位置消失），在原位插入占位卡；生成选中态残影并捕获鼠标。</summary>
+    private void BeginDrag()
+    {
+        if (_dragApp is null || _vm is null) return;
+        _dragOriginalIndex = _vm.Favorites.IndexOf(_dragApp);
+        if (_dragOriginalIndex < 0) return;
+
+        // 抓取偏移（光标在被拖动卡内的相对位置），用 DragCanvas 本地坐标，避免 TransformToVisual(null)
+        var container = FavoritesGrid.ItemContainerGenerator.ContainerFromItem(_dragApp) as Visual;
+        Point cardTl = new Point(0, 0);
+        if (container is not null && DragCanvas is not null)
+        {
+            try { cardTl = container.TransformToVisual(DragCanvas).Transform(new Point(0, 0)); }
+            catch { cardTl = new Point(0, 0); }
+        }
+        if (DragCanvas is not null)
+        {
+            var startLocal = DragCanvas.PointFromScreen(_favoriteDragStartPoint);
+            _grabOffset = new Point(startLocal.X - cardTl.X, startLocal.Y - cardTl.Y);
+        }
+
+        // 进入两两交换拖拽：从收藏区移除被拖动卡，原位留下空卡占位（其余卡不动）
+        _vm.BeginFavoriteDrag(_dragApp);
+        _favoriteDragInProgress = true;
+        _pressTimer.Stop();
+        CreateGhost(_dragApp);
+        if (!Shell.IsMouseCaptured) Shell.CaptureMouse();
+        MoveGhostTo(_favoriteDragStartPoint);
+    }
+
+    /// <summary>生成跟随光标的残影：与卡片选中态一致（浅底 + 半透明黑叠加），缩小 40%。</summary>
+    private void CreateGhost(AppEntry app)
+    {
+        DestroyGhost();
+        var ghost = new Border
+        {
+            Width = 128,
+            Height = 128,
+            Background = new SolidColorBrush(Color.FromRgb(0xF2, 0xF2, 0xF2)), // 卡片底色
+            IsHitTestVisible = false,
+            Opacity = 0.95,
+            LayoutTransform = new ScaleTransform(0.6, 0.6), // 拖动时缩小 40%
+            Effect = new DropShadowEffect { BlurRadius = 14, ShadowDepth = 4, Opacity = 0.35, Color = Colors.Black },
+        };
+
+        var inner = new Grid();
+        var img = new System.Windows.Controls.Image
+        {
+            Width = 48, Height = 48, Stretch = Stretch.Uniform,
+            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+            Source = GetCardIcon(app),
+        };
+        RenderOptions.SetBitmapScalingMode(img, BitmapScalingMode.HighQuality);
+        var name = new TextBlock
+        {
+            Text = app.Name,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33)),
+            FontSize = 11, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Bottom,
+            Margin = new Thickness(0, 0, 0, 12), TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 120, ToolTip = app.Name,
+        };
+        // 选中态叠加（半透明黑），与卡片 hover 一致
+        var overlay = new Border { Background = new SolidColorBrush(Color.FromArgb(0x1A, 0, 0, 0)) };
+        inner.Children.Add(img);
+        inner.Children.Add(name);
+        inner.Children.Add(overlay);
+        ghost.Child = inner;
+
+        DragCanvas.Children.Add(ghost);
+        _dragGhost = ghost;
+    }
+
+    private void DestroyGhost()
+    {
+        if (_dragGhost is not null)
+        {
+            DragCanvas.Children.Remove(_dragGhost);
+            _dragGhost = null;
+        }
+    }
+
+    /// <summary>把残影左上角定位到（光标 - 抓取偏移）处，使抓取点固定在卡片内的原位。</summary>
+    private void MoveGhostTo(Point screen)
+    {
+        if (_dragGhost is null) return;
+        var local = DragCanvas.PointFromScreen(screen);
+        var tl = new Point(local.X - _grabOffset.X, local.Y - _grabOffset.Y);
+        Canvas.SetLeft(_dragGhost, tl.X);
+        Canvas.SetTop(_dragGhost, tl.Y);
+    }
+
+    /// <summary>取卡片中已加载的真图标，用于残影显示（取不到则留空）。</summary>
+    private ImageSource? GetCardIcon(AppEntry app)
+    {
+        var g = FindCardGrid(app);
+        if (g is null) return null;
+        var img = FindImage(g);
+        return img?.Source;
+    }
+
+    private static System.Windows.Controls.Image? FindImage(DependencyObject o)
+    {
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(o); i++)
+        {
+            var c = VisualTreeHelper.GetChild(o, i);
+            if (c is System.Windows.Controls.Image im) return im;
+            var nested = FindImage(c);
+            if (nested is not null) return nested;
+        }
+        return null;
+    }
+
+    private void ApplyShrink(AppEntry app, bool on)
+    {
+        var g = FindCardGrid(app);
+        if (g is null) return;
+        g.RenderTransformOrigin = new Point(0.5, 0.5);
+        g.RenderTransform = on ? new ScaleTransform(0.85, 0.85) : null;
+    }
+
+    private Grid? FindCardGrid(AppEntry app)
+    {
+        var container = FavoritesGrid.ItemContainerGenerator.ContainerFromItem(app) as DependencyObject;
+        return FindGridWithContext(container, app);
+    }
+
+    private static Grid? FindGridWithContext(DependencyObject? o, AppEntry app)
+    {
+        if (o is null) return null;
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(o); i++)
+        {
+            var c = VisualTreeHelper.GetChild(o, i);
+            if (c is Grid g && g.DataContext == app) return g;
+            var nested = FindGridWithContext(c, app);
+            if (nested is not null) return nested;
+        }
+        return null;
+    }
+
+    /// <summary>清除所有收藏卡片可能残留的缩小变换（重排后容器会被回收复用）。</summary>
+    private void ResetAllShrink()
+    {
+        foreach (var item in FavoritesGrid.Items)
+        {
+            var container = FavoritesGrid.ItemContainerGenerator.ContainerFromItem(item) as DependencyObject;
+            ClearCardScale(container);
+        }
+    }
+
+    private static void ClearCardScale(DependencyObject? o)
+    {
+        if (o is null) return;
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(o); i++)
+        {
+            var c = VisualTreeHelper.GetChild(o, i);
+            if (c is Grid g) g.RenderTransform = null;
+            ClearCardScale(c);
+        }
+    }
+
+    private void CancelPress()
+    {
+        _pressTimer.Stop();
+        _longPressArmed = false;
+        _justDragged = false;
+        // 若已进入拖拽态（占位卡已入列），恢复拖拽开始前的原始顺序（不落盘）
+        if (_vm is not null)
+            _vm.CancelFavoriteDrag();
+        _dragApp = null;
+        _dragOriginalIndex = -1;
+        DestroyGhost();
+        if (Shell.IsMouseCaptured) Shell.ReleaseMouseCapture();
     }
 
     /// <summary>
@@ -186,6 +526,7 @@ public partial class PanelWindow : Window
     private void OnDeactivated(object? sender, EventArgs e)
     {
         if (DateTime.Now - _shownAt < TimeSpan.FromMilliseconds(200)) return;
+        if (_favoriteDragInProgress) CancelPress(); // 拖拽中失焦：先取消，避免占位卡/鼠标捕获残留
         HidePanel();
     }
 }

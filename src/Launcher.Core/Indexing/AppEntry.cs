@@ -52,4 +52,7 @@ public sealed class AppEntry
 
     /// <summary>目标是否仍然存在（程序被卸载后为 false）。</summary>
     public bool IsValid { get; set; } = true;
+
+    /// <summary>是否为拖拽时的占位卡（仅用于 UI 占位，不参与收藏与启动）。</summary>
+    public bool IsPlaceholder { get; init; }
 }
