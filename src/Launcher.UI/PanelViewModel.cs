@@ -29,6 +29,15 @@ public sealed partial class PanelViewModel : ObservableObject
     /// <summary>普通区：无搜索时显示未收藏项；有搜索时显示全部匹配项（含被收藏项）。</summary>
     public ObservableCollection<AppEntry> Main => _main;
 
+    /// <summary>Dock 栏中心按钮左侧的收藏（奇数索引 fav[1],fav[3]…，从中心向外）。</summary>
+    public ObservableCollection<AppEntry> DockLeft { get; } = new();
+
+    /// <summary>Dock 栏中心按钮右侧的收藏（偶数索引 fav[0],fav[2]…，从中心向外；越靠前越靠近中心）。</summary>
+    public ObservableCollection<AppEntry> DockRight { get; } = new();
+
+    /// <summary>Dock 栏最多展示的收藏数量。</summary>
+    private const int DockMaxCount = 16;
+
     [ObservableProperty]
     private string _searchText = "";
 
@@ -83,6 +92,7 @@ public sealed partial class PanelViewModel : ObservableObject
             }
         }
         UpdateShowFavorites();
+        RebuildDock();
     }
 
     private static bool Matches(AppEntry e, string q)
@@ -212,6 +222,24 @@ public sealed partial class PanelViewModel : ObservableObject
     }
 
     private void UpdateShowFavorites() => ShowFavorites = !_searchActive && _favorites.Count > 0;
+
+    /// <summary>
+    /// 重建 Dock 栏两侧的收藏集合：取前 16 个，偶数索引入右侧、奇数索引入左侧，
+    /// 使“越靠前的收藏越靠近中心按钮”（D3 居中对称布局）。拖拽占位卡不进入 Dock。
+    /// </summary>
+    private void RebuildDock()
+    {
+        DockLeft.Clear();
+        DockRight.Clear();
+        int n = Math.Min(DockMaxCount, _favorites.Count);
+        for (int i = 0; i < n; i++)
+        {
+            var app = _favorites[i];
+            if (app.IsPlaceholder) continue;
+            if (i % 2 == 0) DockRight.Add(app);
+            else DockLeft.Add(app);
+        }
+    }
 
     partial void OnSearchTextChanged(string value)
     {

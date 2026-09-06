@@ -520,6 +520,29 @@ public partial class PanelWindow : Window
     public void HidePanel() => Hide();
 
     /// <summary>
+    /// 在指定屏幕点（WPF 逻辑坐标）正上方弹出面板，水平居中于该点。
+    /// 由 Dock 中心按钮调用，实现“面板从 Dock 上方弹出”。
+    /// </summary>
+    public void PositionAbove(double anchorCenterLogicalX, double anchorCenterLogicalY)
+    {
+        double w = Width, h = Height;
+        double left = anchorCenterLogicalX - w / 2;
+        double top = anchorCenterLogicalY - h - 8;
+
+        double wl = SystemParameters.WorkArea.Left;
+        double wt = SystemParameters.WorkArea.Top;
+        double wr = SystemParameters.WorkArea.Right;
+        double wb = SystemParameters.WorkArea.Bottom;
+        if (left + w > wr) left = wr - w;
+        if (left < wl) left = wl;
+        if (top + h > wb) top = wb - h;
+        if (top < wt) top = wt;
+
+        Left = left;
+        Top = top;
+    }
+
+    /// <summary>
     /// 面板失焦即隐藏，但显示后的极短时间内忽略 Deactivated，
     /// 避免 Show/Activate 过程中系统瞬间切走焦点导致误关闭。
     /// </summary>

@@ -1,0 +1,89 @@
+<Window x:Class="Launcher.UI.DockWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:core="clr-namespace:Launcher.Core.Indexing;assembly=Launcher.Core"
+        xmlns:conv="clr-namespace:Launcher.UI.Converters"
+        Title="DesktopBeautify Dock"
+        SizeToContent="WidthAndHeight"
+        WindowStyle="None" ResizeMode="NoResize"
+        AllowsTransparency="True" Background="Transparent"
+        ShowInTaskbar="False" Topmost="True"
+        WindowStartupLocation="Manual"
+        SnapsToDevicePixels="True" UseLayoutRounding="True"
+        FontFamily="Segoe UI, Microsoft YaHei UI, sans-serif"
+        PreviewMouseLeftButtonDown="OnPreviewMouseLeftButtonDown"
+        PreviewMouseMove="OnPreviewMouseMove"
+        PreviewMouseLeftButtonUp="OnPreviewMouseLeftButtonUp"
+        Loaded="OnLoaded">
+
+    <Window.Resources>
+        <conv:FirstCharConverter x:Key="FirstCharConv"/>
+
+        <!-- 单个收藏图标：32×32 圆形裁剪，悬浮由代码放大到 48×48 -->
+        <DataTemplate x:Key="DockIconTemplate" DataType="{x:Type core:AppEntry}">
+            <Grid Width="32" Height="32" Margin="5,6" Cursor="Hand" Tag="DockIcon"
+                  RenderTransformOrigin="0.5,0.5"
+                  MouseLeftButtonUp="OnDockAppLaunch"
+                  MouseEnter="OnDockIconEnter" MouseLeave="OnDockIconLeave">
+                <Grid.RenderTransform>
+                    <ScaleTransform ScaleX="1" ScaleY="1"/>
+                </Grid.RenderTransform>
+                <Image Width="32" Height="32" Stretch="Uniform"
+                       RenderOptions.BitmapScalingMode="HighQuality"
+                       Loaded="OnDockIconLoaded">
+                    <Image.Clip>
+                        <EllipseGeometry Center="16,16" RadiusX="15.5" RadiusY="15.5"/>
+                    </Image.Clip>
+                </Image>
+                <!-- 图标未加载（异步/失败）时显示首字母占位；加载成功后由代码隐藏 -->
+                <Border x:Name="DockPh" IsHitTestVisible="False" Visibility="Collapsed">
+                    <TextBlock Text="{Binding Name, Converter={StaticResource FirstCharConv}}"
+                               FontSize="16" FontWeight="SemiBold" Foreground="#3B6BB5"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Border>
+            </Grid>
+        </DataTemplate>
+    </Window.Resources>
+
+    <!-- 长条背景：半透明圆角卡片 + 阴影；整条可拖动（图标与中心按钮除外） -->
+    <Border x:Name="Bar" CornerRadius="18" Background="#F2F2F2F2"
+            BorderBrush="#E0E0E0" BorderThickness="1" Padding="8,6">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="18" ShadowDepth="0" Opacity="0.20" Color="Black"/>
+        </Border.Effect>
+        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+            <!-- 中心按钮左侧：奇数索引，FlowDirection=RTL 使 fav[1] 紧贴中心按钮 -->
+            <ItemsControl ItemsSource="{Binding DockLeft}" ItemTemplate="{StaticResource DockIconTemplate}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Orientation="Horizontal" FlowDirection="RightToLeft"/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+            </ItemsControl>
+
+            <!-- 中心呼出按钮：点击切换应用搜索面板（从 Dock 上方弹出） -->
+            <Button x:Name="CenterButton" Width="34" Height="34" Margin="6,0" Cursor="Hand"
+                    Click="OnCenterButtonClick">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Grid>
+                            <Ellipse Fill="#3B6BB5" Stroke="#FFFFFF" StrokeThickness="1.5"/>
+                            <Path Data="M5,5 L11,11 M11,5 L5,11" Stroke="White" StrokeThickness="2"
+                                  StrokeEndLineCap="Round" Width="16" Height="16"
+                                  HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Grid>
+                    </ControlTemplate>
+                </Button.Template>
+            </Button>
+
+            <!-- 中心按钮右侧：偶数索引，LTR 使 fav[0] 紧贴中心按钮，越靠前越靠近中心 -->
+            <ItemsControl ItemsSource="{Binding DockRight}" ItemTemplate="{StaticResource DockIconTemplate}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Orientation="Horizontal"/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+            </ItemsControl>
+        </StackPanel>
+    </Border>
+</Window>

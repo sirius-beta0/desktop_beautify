@@ -15,6 +15,7 @@ public partial class App : Application
     private Mutex? _mutex;
     private InstancePipeServer? _pipeServer;
     private PanelWindow? _panel;
+    private DockWindow? _dock;
     private NotifyIcon? _tray;
     private PanelViewModel? _vm;
     private AppIndexer? _indexer;
@@ -41,8 +42,9 @@ public partial class App : Application
         _tray  = BuildTray();
         _pipeServer = new InstancePipeServer(TogglePanel);
 
-        // 首启动直接展示一次面板；后续通过 IPC 或托盘切换
-        TogglePanel();
+        // Dock 栏常驻桌面：作为应用搜索面板的主入口；面板默认隐藏，由 Dock 中心按钮唤起
+        _dock = new DockWindow { ViewModel = _vm, Panel = _panel };
+        _dock.Show();
 
         // 先尝试缓存秒开（冷启动不转圈），再后台全量扫描刷新
         var cached = _indexer.LoadCache();
