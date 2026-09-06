@@ -11,6 +11,7 @@
     <RootNamespace>Launcher.App</RootNamespace>
     <AssemblyName>DesktopBeautify.Launcher</AssemblyName>
     <Product>DesktopBeautify Launcher</Product>
+    <Version>0.1.0</Version>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <SatelliteResourceLanguages>zh-Hans;en</SatelliteResourceLanguages>

@@ -19,10 +19,16 @@
 
     <Window.Resources>
         <conv:FirstCharConverter x:Key="FirstCharConv"/>
+        <conv:PathToImageConverter x:Key="PathToImageConv"/>
+        <conv:NullToVisibilityConverter x:Key="NullToVisibilityConv"/>
+        <conv:NotNullToVisibilityConverter x:Key="NotNullToVisibilityConv"/>
 
-        <!-- 单个收藏图标：32×32 圆形裁剪，悬浮由代码放大到 48×48 -->
+        <!-- 单个收藏图标：尺寸绑定 AppSettings.DockIconSize；内部 32×32 设计经 Viewbox 等比缩放
+             （白色圆底 / 圆形裁剪 / 首字母占位统一随动），悬浮由代码放大到 1.5× -->
         <DataTemplate x:Key="DockIconTemplate" DataType="{x:Type core:AppEntry}">
-            <Grid Width="32" Height="32" Margin="5,6" Cursor="Hand" Tag="DockIcon"
+            <Grid Width="{Binding DockIconSize, Source={StaticResource AppSettings}}"
+                  Height="{Binding DockIconSize, Source={StaticResource AppSettings}}"
+                  Margin="5,6" Cursor="Hand" Tag="DockIcon"
                   Background="Transparent"
                   RenderTransformOrigin="0.5,0.5"
                   MouseLeftButtonUp="OnDockAppLaunch">
@@ -55,28 +61,34 @@
                         </Style.Triggers>
                     </Style>
                 </Grid.Style>
-                <!-- 白色圆形底衬：保证所有图标（含透明/方形图标）视觉上都是统一的圆形白底 -->
-                <Ellipse Width="32" Height="32" Fill="White" IsHitTestVisible="False"/>
-                <Image Width="32" Height="32" Stretch="Uniform"
-                       RenderOptions.BitmapScalingMode="HighQuality"
-                       Loaded="OnDockIconLoaded"
-                       IsHitTestVisible="False">
-                    <Image.Clip>
-                        <EllipseGeometry Center="16,16" RadiusX="15.5" RadiusY="15.5"/>
-                    </Image.Clip>
-                </Image>
-                <!-- 图标未加载（异步/失败）时显示首字母占位；加载成功后由代码隐藏 -->
-                <Border x:Name="DockPh" IsHitTestVisible="False" Visibility="Collapsed">
-                    <TextBlock Text="{Binding Name, Converter={StaticResource FirstCharConv}}"
-                               FontSize="16" FontWeight="SemiBold" Foreground="#3B6BB5"
-                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                </Border>
+                <Viewbox Stretch="Uniform">
+                    <Grid Width="32" Height="32">
+                        <!-- 白色圆形底衬：保证所有图标（含透明/方形图标）视觉上都是统一的圆形白底 -->
+                        <Ellipse Width="32" Height="32" Fill="White" IsHitTestVisible="False"/>
+                        <Image Width="32" Height="32" Stretch="Uniform"
+                               RenderOptions.BitmapScalingMode="HighQuality"
+                               Loaded="OnDockIconLoaded"
+                               IsHitTestVisible="False">
+                            <Image.Clip>
+                                <EllipseGeometry Center="16,16" RadiusX="15.5" RadiusY="15.5"/>
+                            </Image.Clip>
+                        </Image>
+                        <!-- 图标未加载（异步/失败）时显示首字母占位；加载成功后由代码隐藏 -->
+                        <Border x:Name="DockPh" IsHitTestVisible="False" Visibility="Collapsed">
+                            <TextBlock Text="{Binding Name, Converter={StaticResource FirstCharConv}}"
+                                       FontSize="16" FontWeight="SemiBold" Foreground="#3B6BB5"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </Grid>
+                </Viewbox>
             </Grid>
         </DataTemplate>
 
         <!-- 添加收藏占位：透明 + 号，无白色底衬，悬浮放大与图标一致；点击打开搜索面板 -->
         <DataTemplate x:Key="DockAddTemplate" DataType="{x:Type core:AppEntry}">
-            <Grid Width="32" Height="32" Margin="5,6" Cursor="Hand" Tag="DockAdd"
+            <Grid Width="{Binding DockIconSize, Source={StaticResource AppSettings}}"
+                  Height="{Binding DockIconSize, Source={StaticResource AppSettings}}"
+                  Margin="5,6" Cursor="Hand" Tag="DockAdd"
                   Background="Transparent"
                   RenderTransformOrigin="0.5,0.5"
                   MouseLeftButtonUp="OnDockAppLaunch">
@@ -107,9 +119,11 @@
                         </Style.Triggers>
                     </Style>
                 </Grid.Style>
-                <TextBlock Text="+" FontSize="26" FontWeight="Light" Foreground="#9AA0A6"
-                           HorizontalAlignment="Center" VerticalAlignment="Center"
-                           IsHitTestVisible="False"/>
+                <Viewbox Stretch="Uniform">
+                    <TextBlock Text="+" FontSize="26" FontWeight="Light" Foreground="#9AA0A6"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                               IsHitTestVisible="False"/>
+                </Viewbox>
             </Grid>
         </DataTemplate>
 
@@ -166,9 +180,16 @@
                                 </Style>
                             </Grid.Style>
                             <Ellipse Fill="#3B6BB5" Stroke="#FFFFFF" StrokeThickness="1.5"/>
+                            <!-- 中心按钮自定义图标：设置 DockCenterIconPath 后显示，隐藏默认 X -->
+                            <Image Source="{Binding DockCenterIconPath, Source={StaticResource AppSettings}, Converter={StaticResource PathToImageConv}}"
+                                   Width="22" Height="22" Stretch="Uniform"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   Visibility="{Binding DockCenterIconPath, Source={StaticResource AppSettings}, Converter={StaticResource NullToVisibilityConv}}"/>
+                            <!-- 默认 X 图标：无自定义图标时显示 -->
                             <Path Data="M5,5 L11,11 M11,5 L5,11" Stroke="White" StrokeThickness="2"
                                   StrokeEndLineCap="Round" Width="16" Height="16"
-                                  HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                  HorizontalAlignment="Center" VerticalAlignment="Center"
+                                  Visibility="{Binding DockCenterIconPath, Source={StaticResource AppSettings}, Converter={StaticResource NotNullToVisibilityConv}}"/>
                         </Grid>
                     </ControlTemplate>
                 </Button.Template>

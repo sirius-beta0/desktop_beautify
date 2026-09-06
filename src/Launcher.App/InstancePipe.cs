@@ -8,6 +8,8 @@ internal static class InstancePipe
 {
     public const string PipeName = "DesktopBeautify.Launcher.SingleInstance";
     public const string ToggleMessage = "toggle";
+    public const string SettingsMessage = "settings";
+    public const string AboutMessage = "about";
 
     /// <summary>
     /// 第二个实例调用：尝试发一条消息给首实例。失败（首实例没起来）返回 false。
@@ -32,11 +34,11 @@ internal static class InstancePipe
 
 internal sealed class InstancePipeServer : IDisposable
 {
-    private readonly Action _onMessage;
+    private readonly Action<string> _onMessage;
     private readonly CancellationTokenSource _cts = new();
     private readonly Task _loop;
 
-    public InstancePipeServer(Action onMessage)
+    public InstancePipeServer(Action<string> onMessage)
     {
         _onMessage = onMessage;
         _loop = Task.Run(ListenAsync);
@@ -60,11 +62,8 @@ internal sealed class InstancePipeServer : IDisposable
 
                 using var ms = new MemoryStream();
                 await server.CopyToAsync(ms, _cts.Token);
-                var msg = Encoding.UTF8.GetString(ms.ToArray());
-                if (msg == InstancePipe.ToggleMessage)
-                {
-                    _onMessage();
-                }
+                var msg = Encoding.UTF8.GetString(ms.ToArray()).TrimEnd('\0').Trim();
+                _onMessage(msg);
             }
             catch (OperationCanceledException)
             {

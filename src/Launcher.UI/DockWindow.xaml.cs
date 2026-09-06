@@ -8,6 +8,7 @@ using System.Runtime.InteropServices;
 using Launcher.Core;
 using Launcher.Core.Dock;
 using Launcher.Core.Indexing;
+using Launcher.Core.Settings;
 
 namespace Launcher.UI;
 
@@ -51,11 +52,65 @@ public partial class DockWindow : Window
     [DllImport("user32.dll")]
     private static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
 
+    // ---- 全局热键（RegisterHotKey，非 WH_KEYBOARD_LL，规避杀软敏感与全局开销）----
+    private const int WM_HOTKEY = 0x0312;
+    private const int HOTKEY_ID = 1;
+
+    [DllImport("user32.dll")]
+    private static extern bool RegisterHotKey(IntPtr hWnd, int id, int fsModifiers, int vk);
+
+    [DllImport("user32.dll")]
+    private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
+
+    /// <summary>全局热键触发时由 App 注入的回调（切换搜索面板）。</summary>
+    public Action? HotkeyPressed { get; set; }
+
+    private HwndSource? _hwndSource;
+    private IntPtr _hwnd;
+    private AppSettings? _pendingHotkey;
+
     private void OnSourceInitialized(object? sender, EventArgs e)
     {
-        var hwnd = new WindowInteropHelper(this).Handle;
-        int exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
-        SetWindowLong(hwnd, GWL_EXSTYLE, exStyle | WS_EX_TOOLWINDOW);
+        _hwnd = new WindowInteropHelper(this).Handle;
+        int exStyle = GetWindowLong(_hwnd, GWL_EXSTYLE);
+        SetWindowLong(_hwnd, GWL_EXSTYLE, exStyle | WS_EX_TOOLWINDOW);
+
+        // 挂消息钩子处理 WM_HOTKEY
+        _hwndSource = HwndSource.FromHwnd(_hwnd);
+        _hwndSource.AddHook(WndProc);
+
+        // App 可能在 SourceInitialized 之前就调用了 ApplyHotkeySettings（句柄未就绪），这里补注册
+        if (_pendingHotkey is not null)
+        {
+            var p = _pendingHotkey;
+            _pendingHotkey = null;
+            ApplyHotkeySettings(p);
+        }
+    }
+
+    private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if (msg == WM_HOTKEY)
+        {
+            HotkeyPressed?.Invoke();
+            handled = false;
+        }
+        return IntPtr.Zero;
+    }
+
+    /// <summary>按当前设置注册/注销全局热键（句柄未就绪时延迟到 OnSourceInitialized 补注册）。</summary>
+    public void ApplyHotkeySettings(AppSettings s)
+    {
+        if (_hwndSource is null) { _pendingHotkey = s; return; }
+        UnregisterHotkey();
+        if (s.HotkeyEnabled)
+            RegisterHotKey(_hwnd, HOTKEY_ID, s.HotkeyModifiers, s.HotkeyKey);
+    }
+
+    private void UnregisterHotkey()
+    {
+        if (_hwndSource is not null)
+            UnregisterHotKey(_hwnd, HOTKEY_ID);
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
