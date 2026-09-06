@@ -48,7 +48,7 @@
             <DockPanel Margin="0,6">
                 <TextBlock Text="项目地址" Width="80" Foreground="#888"/>
                 <TextBlock>
-                    <Hyperlink NavigateUri="{x:Static core:AppInfo.GitHubUrl}"
+                    <Hyperlink x:Name="GitHubLink"
                                RequestNavigate="OnGitHubNavigate"
                                ToolTip="{x:Static core:AppInfo.GitHubUrl}">
                         <Run Text="{x:Static core:AppInfo.GitHubUrl}"/>

@@ -10,6 +10,7 @@ using System.Windows.Media.Effects;
 using Launcher.Core;
 using Launcher.Core.Indexing;
 using Launcher.Core.Platform;
+using Launcher.Core.Settings;
 
 namespace Launcher.UI;
 
@@ -25,7 +26,7 @@ public partial class PanelWindow : Window
 
     // 当前锚定方式：内容高度变化（搜索筛选 / 清空搜索）时据此重新锚定，保持底边贴住 Dock / 任务栏，
     // 避免面板变高后向下溢出盖住 Dock。
-    private enum AnchorMode { None, Dock, Taskbar }
+    private enum AnchorMode { None, Dock, Taskbar, Center }
     private AnchorMode _anchorMode = AnchorMode.None;
     private double _dockAnchorX, _dockAnchorY;   // Dock 中心按钮顶部中心（WPF 逻辑坐标）
     private TaskbarInfo? _taskbarInfo;
@@ -48,6 +49,9 @@ public partial class PanelWindow : Window
             RefreshEmptyState();
         }
     }
+
+    /// <summary>面板从任务栏 / 热键唤起时的弹出位置（由设置注入；Dock 中心按钮唤起始终走 Dock 锚定）。</summary>
+    public PanelPosition PanelAnchor { get; set; } = PanelPosition.BottomLeft;
 
     public PanelWindow()
     {
@@ -523,11 +527,9 @@ public partial class PanelWindow : Window
             HidePanel();
             return;
         }
-        _anchorMode = AnchorMode.Taskbar;   // 先记锚定，供 UpdateLayout 触发的 SizeChanged 重新定位
-        _taskbarInfo = info;
         Show();
         UpdateLayout();   // 强制布局：SizeToContent 下 ActualHeight 此时才反映当前内容高度
-        PlaceAt(info);    // 用真实高度锚定，避免隐藏态旧高度导致定位偏低
+        PlaceForAnchor(info);   // 按设置（左下角 / 居中）定位，内部记录锚定方式
         _shownAt = DateTime.Now;
         Activate();
         SearchBox.Focus();
@@ -579,6 +581,39 @@ public partial class PanelWindow : Window
         Top = top;
     }
 
+    /// <summary>按设置（左下角贴任务栏 / 屏幕底部居中）定位由任务栏或热键唤起的面板。</summary>
+    private void PlaceForAnchor(TaskbarInfo info)
+    {
+        if (PanelAnchor == PanelPosition.Center)
+        {
+            PositionCenter();
+        }
+        else
+        {
+            _anchorMode = AnchorMode.Taskbar;
+            _taskbarInfo = info;
+            PlaceAt(info);
+        }
+    }
+
+    /// <summary>屏幕底部水平居中弹出（忽略任务栏位置）。</summary>
+    private void PositionCenter()
+    {
+        _anchorMode = AnchorMode.Center;
+        _taskbarInfo = null;
+        double w = Width, h = GetContentHeight();
+        double wl = SystemParameters.WorkArea.Left;
+        double wr = SystemParameters.WorkArea.Right;
+        double wb = SystemParameters.WorkArea.Bottom;
+        double margin = 8;
+        double left = (wl + wr) / 2 - w / 2;
+        double top  = wb - h - margin;
+        if (left < wl) left = wl;
+        if (left + w > wr) left = wr - w;
+        Left = left;
+        Top = top;
+    }
+
     /// <summary>
     /// 内容高度变化（如搜索筛选使结果变少/清空搜索使结果变多）时，面板 SizeToContent 改了高度，
     /// 但 Top 未变会导致底边下移盖住 Dock。此处按记录的锚定方式重新定位，使底边保持贴住
@@ -592,6 +627,8 @@ public partial class PanelWindow : Window
         {
             if (_anchorMode == AnchorMode.Dock)
                 PositionAbove(_dockAnchorX, _dockAnchorY);
+            else if (_anchorMode == AnchorMode.Center)
+                PositionCenter();
             else if (_anchorMode == AnchorMode.Taskbar && _taskbarInfo is not null)
                 PlaceAt(_taskbarInfo);
         }

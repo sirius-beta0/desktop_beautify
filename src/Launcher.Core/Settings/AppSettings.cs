@@ -6,6 +6,15 @@ using System.Text.Json.Serialization;
 
 namespace Launcher.Core.Settings;
 
+/// <summary>面板从任务栏 / 热键唤起时的弹出位置。</summary>
+public enum PanelPosition
+{
+    /// <summary>贴任务栏（默认左下角）。</summary>
+    BottomLeft,
+    /// <summary>屏幕底部水平居中。</summary>
+    Center,
+}
+
 /// <summary>
 /// 应用配置（M7-B 设置页）。单例，注入到 Application.Resources["AppSettings"] 供 XAML 绑定；
 /// 字段变更通过 INotifyPropertyChanged 通知（Dock 图标/中心图标即时生效，开机自启/热键由 App 订阅联动）。
@@ -26,6 +35,8 @@ public sealed class AppSettings : INotifyPropertyChanged
     private string? _dockCenterIconPath;
     private bool _runAtStartup;
     private double _dockIconSize = 32;
+    private bool _showDock = true;
+    private PanelPosition _panelPosition = PanelPosition.BottomLeft;
 
     public bool HotkeyEnabled
     {
@@ -65,6 +76,20 @@ public sealed class AppSettings : INotifyPropertyChanged
         set => Set(ref _dockIconSize, Clamp(value, 24, 56));
     }
 
+    /// <summary>是否显示 Dock 栏（默认 true）。</summary>
+    public bool ShowDock
+    {
+        get => _showDock;
+        set => Set(ref _showDock, value);
+    }
+
+    /// <summary>面板从任务栏 / 热键唤起时的弹出位置（默认 BottomLeft 左下角）。</summary>
+    public PanelPosition PanelPosition
+    {
+        get => _panelPosition;
+        set => Set(ref _panelPosition, value);
+    }
+
     public event PropertyChangedEventHandler? PropertyChanged;
 
     private void Set<T>(ref T field, T value, [CallerMemberName] string? name = null)
@@ -95,6 +120,8 @@ public sealed class AppSettings : INotifyPropertyChanged
             DockCenterIconPath = doc.DockCenterIconPath;
             if (doc.RunAtStartup is bool r) RunAtStartup = r;
             if (doc.DockIconSize is double s) DockIconSize = s;
+            if (doc.ShowDock is bool sd) ShowDock = sd;
+            if (doc.PanelPosition is PanelPosition p) PanelPosition = p;
         }
         catch
         {
@@ -116,6 +143,8 @@ public sealed class AppSettings : INotifyPropertyChanged
                 DockCenterIconPath = DockCenterIconPath,
                 RunAtStartup = RunAtStartup,
                 DockIconSize = DockIconSize,
+                ShowDock = ShowDock,
+                PanelPosition = PanelPosition,
             };
             var json = JsonSerializer.Serialize(doc,
                 new JsonSerializerOptions { WriteIndented = true });
@@ -135,5 +164,7 @@ public sealed class AppSettings : INotifyPropertyChanged
         public string? DockCenterIconPath { get; set; }
         public bool? RunAtStartup { get; set; }
         public double? DockIconSize { get; set; }
+        public bool? ShowDock { get; set; }
+        public PanelPosition? PanelPosition { get; set; }
     }
 }

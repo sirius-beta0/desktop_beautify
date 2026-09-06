@@ -57,6 +57,7 @@ public partial class App : Application
         _indexer = new AppIndexer();
         _vm    = new PanelViewModel(new FavoriteStore());
         _panel = new PanelWindow { ViewModel = _vm };
+        _panel.PanelAnchor = _settings.PanelPosition;   // 面板弹出位置（左下角 / 居中）
         _tray  = BuildTray();
         _pipeServer = new InstancePipeServer(OnPipeMessage);
 
@@ -64,6 +65,7 @@ public partial class App : Application
         _dock = new DockWindow { ViewModel = _vm, Panel = _panel };
         _dock.HotkeyPressed = RequestTogglePanel;   // 全局热键 → 切换面板
         _dock.Show();
+        if (!_settings.ShowDock) _dock.Hide();       // 设置关 Dock：初始即隐藏（热键 / 托盘仍可唤起面板）
 
         // 启动参数：首实例若带 --settings/--about，初始化完成后直接打开对应窗口
         if (e.Args.Contains("--settings")) ShowSettingsWindow();
@@ -142,6 +144,17 @@ public partial class App : Application
                   or nameof(AppSettings.HotkeyKey))
                  && _dock is not null && _settings is not null)
             _dock.ApplyHotkeySettings(_settings);
+        else if (e.PropertyName == nameof(AppSettings.PanelPosition)
+                 && _panel is not null && _settings is not null)
+            _panel.PanelAnchor = _settings.PanelPosition;   // 面板弹出位置即时生效
+        else if (e.PropertyName == nameof(AppSettings.ShowDock)
+                 && _dock is not null && _settings is not null)
+        {
+            // 显示 / 隐藏 Dock 栏（Dock 的 Closing 已改为 Hide 保活，此处可直接切换可见性；
+            // 即使隐藏，Dock 句柄仍在，全局热键与托盘仍可唤起面板）
+            if (_settings.ShowDock) _dock.Show();
+            else _dock.Hide();
+        }
     }
 
     private static void ApplyRunAtStartup(bool enable)
