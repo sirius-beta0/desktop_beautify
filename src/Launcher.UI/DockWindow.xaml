@@ -145,8 +145,11 @@
                 </ItemsControl.ItemsPanel>
             </ItemsControl>
 
-            <!-- 中心呼出按钮：点击切换应用搜索面板（从 Dock 上方弹出） -->
-            <Button x:Name="CenterButton" Width="34" Height="34" Margin="6,0" Cursor="Hand"
+            <!-- 中心呼出按钮：点击切换应用搜索面板（从 Dock 上方弹出）。尺寸与 Dock 图标一致（绑定 DockIconSize） -->
+            <Button x:Name="CenterButton"
+                    Width="{Binding DockIconSize, Source={StaticResource AppSettings}}"
+                    Height="{Binding DockIconSize, Source={StaticResource AppSettings}}"
+                    Margin="6,0" Cursor="Hand"
                     PreviewMouseUp="OnCenterButtonUp">
                 <Button.Template>
                     <ControlTemplate TargetType="Button">
@@ -179,18 +182,33 @@
                                     </Style.Triggers>
                                 </Style>
                             </Grid.Style>
-                            <!-- 默认 logo：无自定义图标时显示；与程序图标为同一设计 -->
-                            <Image Source="pack://application:,,,/Launcher.UI;component/Assets/logo.png"
-                                   Width="26" Height="26" Stretch="Uniform"
-                                   HorizontalAlignment="Center" VerticalAlignment="Center"
-                                   RenderOptions.BitmapScalingMode="HighQuality"
-                                   Visibility="{Binding DockCenterIconPath, Source={StaticResource AppSettings}, Converter={StaticResource NotNullToVisibilityConv}}"/>
-                            <!-- 自定义图标：设置后显示，原蓝底按钮已去除 -->
-                            <Image Source="{Binding DockCenterIconPath, Source={StaticResource AppSettings}, Converter={StaticResource PathToImageConv}}"
-                                   Width="26" Height="26" Stretch="Uniform"
-                                   HorizontalAlignment="Center" VerticalAlignment="Center"
-                                   RenderOptions.BitmapScalingMode="HighQuality"
-                                   Visibility="{Binding DockCenterIconPath, Source={StaticResource AppSettings}, Converter={StaticResource NullToVisibilityConv}}"/>
+                            <!-- 内部结构同 Dock 图标：Viewbox 内 32×32 设计，按 DockIconSize 等比缩放 -->
+                            <Viewbox Stretch="Uniform">
+                                <Grid Width="32" Height="32">
+                                    <!-- 白色圆形底衬：与 Dock 图标一致的圆形外观 -->
+                                    <Ellipse Width="32" Height="32" Fill="White" IsHitTestVisible="False"/>
+                                    <!-- 默认 logo：无自定义图标时显示；与程序图标为同一设计，圆形裁剪 -->
+                                    <Image Source="pack://application:,,,/Launcher.UI;component/Assets/logo.png"
+                                           Width="32" Height="32" Stretch="Uniform"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                                           RenderOptions.BitmapScalingMode="HighQuality"
+                                           Visibility="{Binding DockCenterIconPath, Source={StaticResource AppSettings}, Converter={StaticResource NotNullToVisibilityConv}}">
+                                        <Image.Clip>
+                                            <EllipseGeometry Center="16,16" RadiusX="15.5" RadiusY="15.5"/>
+                                        </Image.Clip>
+                                    </Image>
+                                    <!-- 自定义图标：设置后显示，圆形裁剪（原蓝底按钮已去除） -->
+                                    <Image Source="{Binding DockCenterIconPath, Source={StaticResource AppSettings}, Converter={StaticResource PathToImageConv}}"
+                                           Width="32" Height="32" Stretch="Uniform"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                                           RenderOptions.BitmapScalingMode="HighQuality"
+                                           Visibility="{Binding DockCenterIconPath, Source={StaticResource AppSettings}, Converter={StaticResource NullToVisibilityConv}}">
+                                        <Image.Clip>
+                                            <EllipseGeometry Center="16,16" RadiusX="15.5" RadiusY="15.5"/>
+                                        </Image.Clip>
+                                    </Image>
+                                </Grid>
+                            </Viewbox>
                         </Grid>
                     </ControlTemplate>
                 </Button.Template>

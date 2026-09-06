@@ -57,9 +57,17 @@
                     <Button Content="选择图标…" Width="92" Height="30" Click="OnPickIcon"/>
                     <Button Content="恢复默认" Width="84" Height="30" Margin="10,0,0,0" Click="OnResetIcon"/>
                     <Border Width="34" Height="34" Margin="16,0,0,0" CornerRadius="17"
-                            Background="#F0F0F0" BorderBrush="#CCC" BorderThickness="1" VerticalAlignment="Center">
-                        <Image Width="30" Height="30" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality"
-                               Source="{Binding DockCenterIconPath, Converter={StaticResource PathToImageConv}}"/>
+                            Background="White" BorderBrush="#CCC" BorderThickness="1" VerticalAlignment="Center">
+                        <Grid>
+                            <Ellipse Width="34" Height="34" Fill="White" IsHitTestVisible="False"/>
+                            <Image Width="30" Height="30" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   Source="{Binding DockCenterIconPath, Converter={StaticResource PathToImageConv}}">
+                                <Image.Clip>
+                                    <EllipseGeometry Center="15,15" RadiusX="14.5" RadiusY="14.5"/>
+                                </Image.Clip>
+                            </Image>
+                        </Grid>
                     </Border>
                     <TextBlock Text="预览" Foreground="#999" FontSize="11" VerticalAlignment="Center" Margin="6,0,0,0"/>
                 </StackPanel>

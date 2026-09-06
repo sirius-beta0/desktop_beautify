@@ -9,7 +9,8 @@
         Loaded="Window_Loaded">
 
     <Window.Resources>
-        <RectangleGeometry x:Key="SquareClip" Rect="0,0,300,300"/>
+        <!-- 圆形裁剪视窗：半径 150，居中于 300×300 画布，输出即为圆形 PNG -->
+        <EllipseGeometry x:Key="CircleClip" Center="150,150" RadiusX="150" RadiusY="150"/>
     </Window.Resources>
 
     <Grid Margin="20,18">
@@ -22,28 +23,34 @@
         </Grid.RowDefinitions>
 
         <TextBlock Grid.Row="0" Text="裁剪中心按钮图标" FontSize="18" FontWeight="SemiBold" Foreground="#1F1F1F"/>
-        <TextBlock Grid.Row="1" Text="拖拽移动、滑动缩放，确认后生成正方形图标。"
-                   Foreground="#999" FontSize="11" Margin="0,4,0,14"/>
+        <TextBlock Grid.Row="1" Text="圆形预览：拖拽移动、滑动缩放，确认后生成圆形图标（外角透明）。"
+                   Foreground="#999" FontSize="11" Margin="0,4,0,14" TextWrapping="Wrap"/>
 
-        <Border Grid.Row="2" BorderBrush="#CCC" BorderThickness="1" Background="White"
+        <!-- 方形外框（取景框），内部圆形视窗由 CropCanvas 的圆形裁剪实现 -->
+        <Border Grid.Row="2" BorderBrush="#CCC" BorderThickness="1" Background="#FAFAFA"
                 Width="302" Height="302" HorizontalAlignment="Center" VerticalAlignment="Center">
-            <Canvas x:Name="CropCanvas" Width="300" Height="300"
-                    Clip="{StaticResource SquareClip}"
-                    Background="Transparent"
-                    MouseLeftButtonDown="OnCanvasMouseDown"
-                    MouseMove="OnCanvasMouseMove"
-                    MouseLeftButtonUp="OnCanvasMouseUp"
-                    MouseLeave="OnCanvasMouseLeave">
-                <Image x:Name="SourceImage" Stretch="Uniform"
-                       RenderTransformOrigin="0.5,0.5">
-                    <Image.RenderTransform>
-                        <TransformGroup>
-                            <ScaleTransform x:Name="ScaleTf" ScaleX="1" ScaleY="1" CenterX="0" CenterY="0"/>
-                            <TranslateTransform x:Name="TranslateTf" X="0" Y="0"/>
-                        </TransformGroup>
-                    </Image.RenderTransform>
-                </Image>
-            </Canvas>
+            <Grid Width="300" Height="300">
+                <Canvas x:Name="CropCanvas" Width="300" Height="300"
+                        Clip="{StaticResource CircleClip}"
+                        Background="Transparent"
+                        MouseLeftButtonDown="OnCanvasMouseDown"
+                        MouseMove="OnCanvasMouseMove"
+                        MouseLeftButtonUp="OnCanvasMouseUp"
+                        MouseLeave="OnCanvasMouseLeave">
+                    <!-- 图片放在画布 (0,0)，缩放绕视口中心 (150,150) 进行，平移量对称计算，保证居中不偏移 -->
+                    <Image x:Name="SourceImage" Stretch="Uniform">
+                        <Image.RenderTransform>
+                            <TransformGroup>
+                                <ScaleTransform x:Name="ScaleTf" ScaleX="1" ScaleY="1" CenterX="150" CenterY="150"/>
+                                <TranslateTransform x:Name="TranslateTf" X="0" Y="0"/>
+                            </TransformGroup>
+                        </Image.RenderTransform>
+                    </Image>
+                </Canvas>
+                <!-- 圆形取景描边引导（不参与截图，仅提示圆形范围） -->
+                <Ellipse Width="300" Height="300" Stroke="#40888888" StrokeThickness="1.5"
+                         IsHitTestVisible="False"/>
+            </Grid>
         </Border>
 
         <Grid Grid.Row="3" Margin="0,16,0,0">

@@ -23,6 +23,8 @@ docs/
 [Ll]ogs/
 artifacts/
 bld/
+# 打包脚本产出的发布 zip（由 package.ps1 生成）
+Output/
 x64/
 x86/
 [Ww][Ii][Nn]32/

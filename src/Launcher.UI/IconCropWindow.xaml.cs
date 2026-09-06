@@ -9,8 +9,8 @@ using System.Windows.Media.Imaging;
 namespace Launcher.UI;
 
 /// <summary>
-/// 图标裁剪窗：选择一张图片后可在 300×300 正方形视口里缩放 + 拖拽平移，
-/// 确认后输出为 256×256 PNG 作为 Dock 中心按钮自定义图标。
+/// 图标裁剪窗：选择一张图片后可在 300×300 圆形视口里缩放 + 拖拽平移，
+/// 确认后输出为 256×256 圆形 PNG（外角透明）作为 Dock 中心按钮自定义图标。
 /// </summary>
 public partial class IconCropWindow : Window
 {
@@ -36,6 +36,9 @@ public partial class IconCropWindow : Window
         {
             var uri = new Uri(_sourcePath, UriKind.Absolute);
             var src = new BitmapImage(uri) { CacheOption = BitmapCacheOption.OnLoad };
+            // 显式锁定到原始像素尺寸 + Stretch=Uniform，避免不同 DPI/测量下 ActualWidth 偏差
+            SourceImage.Width = src.PixelWidth;
+            SourceImage.Height = src.PixelHeight;
             SourceImage.Source = src;
             SourceImage.SizeChanged += OnSourceSizeChanged;
         }
@@ -55,19 +58,29 @@ public partial class IconCropWindow : Window
         FitAndCenter();
     }
 
-    /// <summary>让图片完整落入 300×300 视口并居中；小图不强制放大，保持原尺寸。</summary>
+    /// <summary>
+    /// 让图片完整落入 300×300 圆形视口并居中。
+    /// 关键：缩放绕「视口中心 (150,150)」进行，平移量按 (150 - w/2)*s 计算，
+    /// 使图片中心始终落在视口中心，缩放/拖拽都不会产生偏移。
+    /// </summary>
     private void FitAndCenter()
     {
         double w = SourceImage.ActualWidth;
         double h = SourceImage.ActualHeight;
         double scale = Math.Min(300.0 / w, 300.0 / h);
         if (scale > 1.0) scale = 1.0;   // 小图默认不放大，避免模糊
+
+        Canvas.SetLeft(SourceImage, 0);
+        Canvas.SetTop(SourceImage, 0);
+        // 缩放绕视口中心，天然保持中心内容不动
+        ScaleTf.CenterX = 150;
+        ScaleTf.CenterY = 150;
+        ScaleTf.ScaleX = scale;
+        ScaleTf.ScaleY = scale;
+        // 平移使图片中心对齐视口中心（对称，无左右偏移）
+        TranslateTf.X = (150 - w / 2) * scale;
+        TranslateTf.Y = (150 - h / 2) * scale;
         ZoomSlider.Value = scale;
-        ApplyZoom();
-        Canvas.SetLeft(SourceImage, 150 - w / 2);
-        Canvas.SetTop(SourceImage, 150 - h / 2);
-        TranslateTf.X = 0;
-        TranslateTf.Y = 0;
     }
 
     private void OnFit(object sender, RoutedEventArgs e) => FitAndCenter();
@@ -75,6 +88,7 @@ public partial class IconCropWindow : Window
     private void OnZoomChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
         => ApplyZoom();
 
+    /// <summary>缩放绕视口中心进行，平移量保持不变 → 当前中心内容始终固定，绝不偏移。</summary>
     private void ApplyZoom()
     {
         double s = ZoomSlider.Value;
@@ -96,10 +110,8 @@ public partial class IconCropWindow : Window
     {
         if (!_isDragging) return;
         var pt = e.GetPosition(CropCanvas);
-        var dx = pt.X - _lastMouse.X;
-        var dy = pt.Y - _lastMouse.Y;
-        TranslateTf.X += dx;
-        TranslateTf.Y += dy;
+        TranslateTf.X += pt.X - _lastMouse.X;
+        TranslateTf.Y += pt.Y - _lastMouse.Y;
         _lastMouse = pt;
     }
 
@@ -142,41 +154,42 @@ public partial class IconCropWindow : Window
     }
 
     /// <summary>
-    /// 将当前视口渲染为 256×256 PNG，保存到 %LocalAppData%/DesktopBeautify/center_icon/。
-    /// 使用时间戳命名，避免浏览器/缓存旧图。
+    /// 将当前圆形视口渲染为 256×256 圆形 PNG，保存到 %LocalAppData%/DesktopBeautify/center_icon/。
+    /// 做法：先把 CropCanvas（含圆形裁剪）按原生 300×300 渲染，再用 DrawImage 等比缩放到 256，
+    /// 这样绝不会因 RenderTransform 缩放引入偏移/裁剪错位。圆形裁剪由 CropCanvas.Clip 决定，外角天然透明。
     /// </summary>
     private string SaveCroppedPng()
     {
         const int viewSize = 300;
         const int outSize = 256;
 
-        // 临时对 CropCanvas 做缩放，使 300 视口渲染成 256 输出
-        var oldTransform = CropCanvas.RenderTransform;
-        double saveScale = (double)outSize / viewSize;
-        CropCanvas.RenderTransform = new ScaleTransform(saveScale, saveScale);
+        // 1) 原生尺寸渲染（不施加任何 RenderTransform，避免坐标偏移）
+        var rtbView = new RenderTargetBitmap(viewSize, viewSize, 96, 96, PixelFormats.Pbgra32);
+        rtbView.Render(CropCanvas);
 
-        try
+        // 2) 等比缩放 300 -> 256（DrawingVisual 居中绘制，天然居中）
+        var dv = new DrawingVisual();
+        using (var dc = dv.RenderOpen())
         {
-            var rtb = new RenderTargetBitmap(outSize, outSize, 96, 96, PixelFormats.Pbgra32);
-            rtb.Render(CropCanvas);
+            dc.DrawImage(rtbView, new Rect(0, 0, outSize, outSize));
+        }
+        var rtb = new RenderTargetBitmap(outSize, outSize, 96, 96, PixelFormats.Pbgra32);
+        rtb.Render(dv);
 
-            string dir = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "DesktopBeautify", "center_icon");
-            Directory.CreateDirectory(dir);
-            string file = $"center_{DateTime.Now:yyyyMMdd_HHmmss_fff}.png";
-            string path = Path.Combine(dir, file);
+        string dir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "DesktopBeautify", "center_icon");
+        Directory.CreateDirectory(dir);
+        string file = $"center_{DateTime.Now:yyyyMMdd_HHmmss_fff}.png";
+        string path = Path.Combine(dir, file);
 
-            using var fs = new FileStream(path, FileMode.Create, FileAccess.Write);
+        using (var fs = new FileStream(path, FileMode.Create, FileAccess.Write))
+        {
             var encoder = new PngBitmapEncoder();
             encoder.Frames.Add(BitmapFrame.Create(rtb));
             encoder.Save(fs);
+        }
 
-            return path;
-        }
-        finally
-        {
-            CropCanvas.RenderTransform = oldTransform;
-        }
+        return path;
     }
 }
