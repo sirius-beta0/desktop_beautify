@@ -2,6 +2,7 @@ using System.Drawing;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Forms;
+using Launcher.Core.Indexing;
 using Launcher.Core.Platform;
 using Launcher.UI;
 using Application = System.Windows.Application;
@@ -14,6 +15,7 @@ public partial class App : Application
     private InstancePipeServer? _pipeServer;
     private PanelWindow? _panel;
     private NotifyIcon? _tray;
+    private PanelViewModel? _vm;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -31,12 +33,36 @@ public partial class App : Application
             return;
         }
 
-        _panel  = new PanelWindow();
-        _tray   = BuildTray();
+        _vm    = new PanelViewModel();
+        _panel = new PanelWindow { ViewModel = _vm };
+        _tray  = BuildTray();
         _pipeServer = new InstancePipeServer(TogglePanel);
 
         // 首启动直接展示一次面板；后续通过 IPC 或托盘切换
         TogglePanel();
+
+        // 后台扫描，不阻塞 UI
+        _ = ScanAppsAsync();
+    }
+
+    private async Task ScanAppsAsync()
+    {
+        if (_vm is null) return;
+        var scanner = new StartMenuScanner();
+        try
+        {
+            var apps = await scanner.ScanAsync();
+            // 切回 UI 线程写集合（ObservableCollection 非线程安全）
+            await Dispatcher.InvokeAsync(() =>
+            {
+                _vm.SetApps(apps);
+                _panel?.RefreshEmptyState();
+            });
+        }
+        catch
+        {
+            await Dispatcher.InvokeAsync(() => _vm.IsIndexing = false);
+        }
     }
 
     private void TogglePanel()
@@ -65,9 +91,12 @@ public partial class App : Application
         var menu = new ContextMenuStrip();
         var toggleItem = new ToolStripMenuItem("显示 / 隐藏面板");
         toggleItem.Click += (_, _) => TogglePanel();
+        var refreshItem = new ToolStripMenuItem("刷新应用列表");
+        refreshItem.Click += async (_, _) => await ScanAppsAsync();
         var exitItem = new ToolStripMenuItem("退出");
         exitItem.Click += (_, _) => Shutdown();
         menu.Items.Add(toggleItem);
+        menu.Items.Add(refreshItem);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(exitItem);
         tray.ContextMenuStrip = menu;

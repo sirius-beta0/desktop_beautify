@@ -1,6 +1,9 @@
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using Launcher.Core;
+using Launcher.Core.Indexing;
 using Launcher.Core.Platform;
 
 namespace Launcher.UI;
@@ -8,6 +11,18 @@ namespace Launcher.UI;
 public partial class PanelWindow : Window
 {
     private bool _everActivated;
+    private PanelViewModel? _vm;
+
+    public PanelViewModel ViewModel
+    {
+        get => _vm!;
+        set
+        {
+            _vm = value;
+            DataContext = value;
+            RefreshEmptyState();
+        }
+    }
 
     public PanelWindow()
     {
@@ -23,7 +38,11 @@ public partial class PanelWindow : Window
     }
 
     private void OnSearchStateChanged(object sender, RoutedEventArgs e) => UpdatePlaceholder();
-    private void OnSearchStateChanged(object sender, TextChangedEventArgs e) => UpdatePlaceholder();
+    private void OnSearchStateChanged(object sender, TextChangedEventArgs e)
+    {
+        UpdatePlaceholder();
+        RefreshEmptyState();
+    }
 
     private void UpdatePlaceholder()
     {
@@ -32,7 +51,33 @@ public partial class PanelWindow : Window
     }
 
     /// <summary>
-    /// 根据任务栏信息贴边放置面板。后续每次显示前都应调用，因为任务栏位置可能改变。
+    /// 根据当前列表 / 搜索状态切换空提示与网格的可见性。
+    /// </summary>
+    public void RefreshEmptyState()
+    {
+        if (_vm is null) return;
+
+        var hasItems = _vm.AppsView.Cast<AppEntry>().Any();
+        AppGrid.Visibility = hasItems ? Visibility.Visible : Visibility.Collapsed;
+        EmptyHint.Visibility = hasItems ? Visibility.Collapsed : Visibility.Visible;
+
+        EmptyHint.Text = _vm.IsIndexing
+            ? "正在索引已安装应用…"
+            : !string.IsNullOrWhiteSpace(_vm.SearchText)
+                ? "未找到匹配的应用"
+                : "未索引到应用（请检查开始菜单目录）";
+    }
+
+    /// <summary>网格项单击即启动。M5 再加收藏与回车选择。</summary>
+    private void OnAppLaunch(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not FrameworkElement fe || fe.DataContext is not AppEntry app) return;
+        AppLauncher.Launch(app);
+        HidePanel();
+    }
+
+    /// <summary>
+    /// 根据任务栏信息贴边放置面板。每次显示前都应调用，因为任务栏位置可能改变。
     /// </summary>
     public void PlaceAt(TaskbarInfo info)
     {
@@ -99,6 +144,7 @@ public partial class PanelWindow : Window
         Show();
         Activate();
         _everActivated = false;   // 重置，下次 Deactivated 由本次激活算起
+        SearchBox.Focus();
     }
 
     public void HidePanel() => Hide();
