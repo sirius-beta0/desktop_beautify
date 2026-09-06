@@ -4,7 +4,7 @@
         xmlns:core="clr-namespace:Launcher.Core.Indexing;assembly=Launcher.Core"
         xmlns:local="clr-namespace:Launcher.UI"
         xmlns:conv="clr-namespace:Launcher.UI.Converters"
-        Width="572" Height="608"
+        Width="572" Height="640"
         WindowStyle="None" ResizeMode="NoResize"
         AllowsTransparency="True" Background="Transparent"
         ShowInTaskbar="False"
@@ -118,17 +118,23 @@
             </Border>
 
             <Grid Grid.Row="1" Margin="0,12,0,0">
-                <ScrollViewer x:Name="ContentScroll"
-                              Height="512"
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                <!-- 收藏区标题：移到 ScrollViewer 之外，避免占用 512 高度预算导致第4行被遮挡（M7-C） -->
+                <TextBlock x:Name="FavHeader" Grid.Row="0"
+                           Text="已收藏" FontSize="12" Foreground="#888"
+                           Margin="4,0,0,6"
+                           Visibility="{Binding ShowFavorites, Converter={StaticResource BoolToVis}}"/>
+                <ScrollViewer x:Name="ContentScroll" Grid.Row="1"
+                              MaxHeight="512"
                               VerticalScrollBarVisibility="Auto"
                               HorizontalScrollBarVisibility="Disabled">
                     <StackPanel>
                         <!-- 收藏区：置顶，与下方普通列表隔离；搜索时由 VM 控制隐藏 -->
                         <StackPanel x:Name="FavoritesGroup"
                                     Visibility="{Binding ShowFavorites, Converter={StaticResource BoolToVis}}">
-                            <TextBlock Text="已收藏"
-                                       FontSize="12" Foreground="#888"
-                                       Margin="4,0,0,6"/>
                             <ItemsControl x:Name="FavoritesGrid"
                                           ItemsSource="{Binding Favorites}"
                                           ItemTemplate="{StaticResource AppItemTemplate}"
@@ -154,7 +160,7 @@
                         </ItemsControl>
                     </StackPanel>
                 </ScrollViewer>
-                <TextBlock x:Name="EmptyHint"
+                <TextBlock x:Name="EmptyHint" Grid.Row="1"
                            Text="正在索引已安装应用…"
                            HorizontalAlignment="Center" VerticalAlignment="Center"
                            TextWrapping="Wrap"

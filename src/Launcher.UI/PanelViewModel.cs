@@ -163,6 +163,7 @@ public sealed partial class PanelViewModel : ObservableObject
         _store.Replace(_favorites.Select(a => a.Id).ToList());
         ClearDragState();
         UpdateShowFavorites();
+        RebuildDock();   // M7-D：拖拽重排落定后实时刷新 Dock（收藏顺序变了）
     }
 
     /// <summary>取消拖拽：恢复拖拽开始前的原始顺序（不落盘）。</summary>
@@ -226,8 +227,10 @@ public sealed partial class PanelViewModel : ObservableObject
     /// <summary>
     /// 重建 Dock 栏两侧的收藏集合：取前 16 个，偶数索引入右侧、奇数索引入左侧，
     /// 使“越靠前的收藏越靠近中心按钮”（D3 居中对称布局）。拖拽占位卡不进入 Dock。
+    /// M7-C：图标个数为奇数时，短侧补一个透明「+」占位（点击打开搜索面板），
+    /// 使 Dock 与面板中心对齐。占位不写入存储、仅存在于 Dock 集合，下次重建即重算。
     /// </summary>
-    private void RebuildDock()
+    internal void RebuildDock()
     {
         DockLeft.Clear();
         DockRight.Clear();
@@ -239,7 +242,14 @@ public sealed partial class PanelViewModel : ObservableObject
             if (i % 2 == 0) DockRight.Add(app);
             else DockLeft.Add(app);
         }
+
+        // M7-C：奇数个时两侧数量不等，给少的一侧补「+」占位，重新居中
+        if (DockLeft.Count < DockRight.Count) DockLeft.Add(MakeDockAdd());
+        else if (DockRight.Count < DockLeft.Count) DockRight.Add(MakeDockAdd());
     }
+
+    /// <summary>Dock 栏「添加收藏」占位项（透明 + 号，点击打开搜索面板）。</summary>
+    private static AppEntry MakeDockAdd() => new() { Id = "__dock_add__", Name = "+", IsDockAdd = true };
 
     partial void OnSearchTextChanged(string value)
     {

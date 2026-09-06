@@ -3,11 +3,12 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:core="clr-namespace:Launcher.Core.Indexing;assembly=Launcher.Core"
         xmlns:conv="clr-namespace:Launcher.UI.Converters"
+        xmlns:local="clr-namespace:Launcher.UI"
         Title="DesktopBeautify Dock"
         SizeToContent="WidthAndHeight"
         WindowStyle="None" ResizeMode="NoResize"
         AllowsTransparency="True" Background="Transparent"
-        ShowInTaskbar="False" Topmost="True"
+        ShowInTaskbar="False"
         WindowStartupLocation="Manual"
         SnapsToDevicePixels="True" UseLayoutRounding="True"
         FontFamily="Segoe UI, Microsoft YaHei UI, sans-serif"
@@ -72,6 +73,47 @@
                 </Border>
             </Grid>
         </DataTemplate>
+
+        <!-- 添加收藏占位：透明 + 号，无白色底衬，悬浮放大与图标一致；点击打开搜索面板 -->
+        <DataTemplate x:Key="DockAddTemplate" DataType="{x:Type core:AppEntry}">
+            <Grid Width="32" Height="32" Margin="5,6" Cursor="Hand" Tag="DockAdd"
+                  Background="Transparent"
+                  RenderTransformOrigin="0.5,0.5"
+                  MouseLeftButtonUp="OnDockAppLaunch">
+                <Grid.RenderTransform>
+                    <ScaleTransform ScaleX="1" ScaleY="1"/>
+                </Grid.RenderTransform>
+                <Grid.Style>
+                    <Style TargetType="Grid">
+                        <Style.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetProperty="RenderTransform.(ScaleTransform.ScaleX)" To="1.5" Duration="0:0:0.12"/>
+                                            <DoubleAnimation Storyboard.TargetProperty="RenderTransform.(ScaleTransform.ScaleY)" To="1.5" Duration="0:0:0.12"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetProperty="RenderTransform.(ScaleTransform.ScaleX)" To="1" Duration="0:0:0.12"/>
+                                            <DoubleAnimation Storyboard.TargetProperty="RenderTransform.(ScaleTransform.ScaleY)" To="1" Duration="0:0:0.12"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
+                            </Trigger>
+                        </Style.Triggers>
+                    </Style>
+                </Grid.Style>
+                <TextBlock Text="+" FontSize="26" FontWeight="Light" Foreground="#9AA0A6"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                           IsHitTestVisible="False"/>
+            </Grid>
+        </DataTemplate>
+
+        <local:DockTemplateSelector x:Key="DockTemplateSelector"/>
     </Window.Resources>
 
     <!-- 长条背景：半透明圆角卡片。注意：透明窗体(AllowsTransparency)上挂 DropShadowEffect
@@ -81,7 +123,7 @@
             BorderBrush="#CFCFCF" BorderThickness="1" Padding="8,6">
         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
             <!-- 中心按钮左侧：奇数索引，FlowDirection=RTL 使 fav[1] 紧贴中心按钮 -->
-            <ItemsControl ItemsSource="{Binding DockLeft}" ItemTemplate="{StaticResource DockIconTemplate}">
+            <ItemsControl ItemsSource="{Binding DockLeft}" ItemTemplateSelector="{StaticResource DockTemplateSelector}">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
                         <StackPanel Orientation="Horizontal" FlowDirection="RightToLeft"/>
@@ -91,8 +133,7 @@
 
             <!-- 中心呼出按钮：点击切换应用搜索面板（从 Dock 上方弹出） -->
             <Button x:Name="CenterButton" Width="34" Height="34" Margin="6,0" Cursor="Hand"
-                    PreviewMouseDown="OnCenterButtonPreviewDown"
-                    Click="OnCenterButtonClick">
+                    PreviewMouseUp="OnCenterButtonUp">
                 <Button.Template>
                     <ControlTemplate TargetType="Button">
                         <Grid RenderTransformOrigin="0.5,0.5">
@@ -134,7 +175,7 @@
             </Button>
 
             <!-- 中心按钮右侧：偶数索引，LTR 使 fav[0] 紧贴中心按钮，越靠前越靠近中心 -->
-            <ItemsControl ItemsSource="{Binding DockRight}" ItemTemplate="{StaticResource DockIconTemplate}">
+            <ItemsControl ItemsSource="{Binding DockRight}" ItemTemplateSelector="{StaticResource DockTemplateSelector}">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
                         <StackPanel Orientation="Horizontal"/>

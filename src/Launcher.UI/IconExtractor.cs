@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -59,20 +61,14 @@ public static class IconExtractor
                 return cached;
 
             var source = await Task.Run(() => Extract(path)).ConfigureAwait(false);
-            if (source is null)
-            {
-                Cache[id] = null;
-                return null;
-            }
-
-            source.Freeze();
+            // 主路径 + 兜底均未取得图标：缓存 null 保持稳态（避免每次重绘重试）；
+            // 其余异常路径不缓存，允许后续重试（冷启动 COM/Shell 偶发失败）。
             Cache[id] = source;
-            TrimIfNeeded();
+            if (source is not null) TrimIfNeeded();
             return source;
         }
         catch
         {
-            Cache[id] = null;
             return null;
         }
         finally
@@ -83,6 +79,7 @@ public static class IconExtractor
 
     private static BitmapSource? Extract(string path)
     {
+        BitmapSource? bmp = null;
         try
         {
             using var item = ShellItem.Open(path);
@@ -91,12 +88,87 @@ public static class IconExtractor
                 ShellItemGetImageOptions.IconOnly | ShellItemGetImageOptions.ScaleUp);
 
             // 在 SafeHBITMAP 被释放前同步读取位图数据。
-            return ConvertHBitmap(hbm.DangerousGetHandle());
+            bmp = ConvertHBitmap(hbm.DangerousGetHandle());
+        }
+        catch (Exception ex)
+        {
+            LogIcon(path, $"IShellItem THREW {ex.GetType().Name}");
+        }
+
+        if (bmp is not null) return bmp;
+
+        // 主路径未拿到图标（返回 null 或抛异常）→ 兜底用 SHGetFileInfo，对 .lnk / 商店应用 /
+        // 冷启动 COM 异常更稳（仅对文件系统路径有效，shell: 命名空间不适用）。
+        if (!path.StartsWith("shell:", StringComparison.OrdinalIgnoreCase))
+            LogIcon(path, "IShellItem_NULL -> SHGetFileInfo");
+        var fb = ExtractViaSHGetFileInfo(path);
+        if (fb is null)
+            LogIcon(path, "FAIL(both IShellItem + SHGetFileInfo)");
+        return fb;
+    }
+
+    /// <summary>
+    /// SHGetFileInfo 兜底提取：返回系统为该文件类型/路径注册的关联图标（分辨率通常 32px，
+    /// 低于 IShellItemImageFactory 的 96px，但成功率更高，作为兜底可避免“无图标/默认文档图标”）。
+    /// </summary>
+    private static BitmapSource? ExtractViaSHGetFileInfo(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || path.StartsWith("shell:", StringComparison.OrdinalIgnoreCase))
+            return null;
+        var psfi = new SHFILEINFO();
+        var h = SHGetFileInfo(path, 0, ref psfi, (uint)Marshal.SizeOf<SHFILEINFO>(), SHGFI_ICON | SHGFI_LARGEICON);
+        if (h == IntPtr.Zero || psfi.hIcon == IntPtr.Zero) return null;
+        try
+        {
+            var src = Imaging.CreateBitmapSourceFromHIcon(psfi.hIcon, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
+            var converted = new FormatConvertedBitmap(src, PixelFormats.Pbgra32, null, 0);
+            converted.Freeze();
+            return converted;
         }
         catch
         {
             return null;
         }
+        finally
+        {
+            DestroyIcon(psfi.hIcon);
+        }
+    }
+
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+    private static extern IntPtr SHGetFileInfo(string pszPath, uint dwFileAttributes, ref SHFILEINFO psfi, uint cbFileInfo, uint uFlags);
+
+    [DllImport("user32.dll")]
+    private static extern bool DestroyIcon(IntPtr hIcon);
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct SHFILEINFO
+    {
+        public IntPtr hIcon;
+        public int iIcon;
+        public uint dwAttributes;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)]
+        public string szDisplayName;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 80)]
+        public string szTypeName;
+    }
+
+    private const uint SHGFI_ICON = 0x100;
+    private const uint SHGFI_LARGEICON = 0x0;
+
+    /// <summary>
+    /// 图标提取诊断：仅记录失败/兜底路径，便于定位“显示成默认文档图标”的应用的确切图标来源。
+    /// 日志写在 exe 同目录 icons.log，确认无误后可删除，不影响主流程。
+    /// </summary>
+    private static void LogIcon(string path, string result)
+    {
+        try
+        {
+            var dir = Path.GetDirectoryName(Process.GetCurrentProcess().MainModule?.FileName) ?? AppContext.BaseDirectory;
+            File.AppendAllText(Path.Combine(dir, "icons.log"),
+                $"[{DateTime.Now:HH:mm:ss}] {result} key={path}\n");
+        }
+        catch { /* 诊断日志不可影响主流程 */ }
     }
 
     private static BitmapSource ConvertHBitmap(IntPtr hbitmap)

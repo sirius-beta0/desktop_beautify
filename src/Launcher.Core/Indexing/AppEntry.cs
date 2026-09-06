@@ -55,4 +55,7 @@ public sealed class AppEntry
 
     /// <summary>是否为拖拽时的占位卡（仅用于 UI 占位，不参与收藏与启动）。</summary>
     public bool IsPlaceholder { get; init; }
+
+    /// <summary>是否为 Dock 栏“添加收藏”占位（透明 + 号，点击打开搜索面板）。</summary>
+    public bool IsDockAdd { get; init; }
 }

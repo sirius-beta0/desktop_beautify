@@ -1,4 +1,6 @@
 using System.Linq;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Threading;
 using System.Windows.Controls;
@@ -20,6 +22,14 @@ public partial class PanelWindow : Window
     private AppEntry? _dragApp;
     private int _dragOriginalIndex = -1;     // 被拖动卡在收藏区的原始索引
     private readonly AppEntry _placeholder = new() { Id = "__drag_placeholder__", Name = "", IsPlaceholder = true };
+
+    // 当前锚定方式：内容高度变化（搜索筛选 / 清空搜索）时据此重新锚定，保持底边贴住 Dock / 任务栏，
+    // 避免面板变高后向下溢出盖住 Dock。
+    private enum AnchorMode { None, Dock, Taskbar }
+    private AnchorMode _anchorMode = AnchorMode.None;
+    private double _dockAnchorX, _dockAnchorY;   // Dock 中心按钮顶部中心（WPF 逻辑坐标）
+    private TaskbarInfo? _taskbarInfo;
+    private bool _reanchoring;
     private Point _favoriteDragStartPoint;   // 按下时的屏幕坐标
     private Point _grabOffset;               // 光标相对卡片左上角的偏移（DragCanvas 本地坐标）
     private Border? _dragGhost;              // 拖拽时跟随光标的卡片残影（选中态样式、缩小 40%）
@@ -52,6 +62,7 @@ public partial class PanelWindow : Window
         };
         Deactivated += OnDeactivated;
         Loaded += (_, _) => SearchBox.Focus();
+        SizeChanged += OnSizeChanged;   // 窗口尺寸变化兜底重锚定（固定高度下仅首次布局触发；搜索筛选在 ScrollViewer 内滚动，不触发本事件，面板不跳动）
         _pressTimer.Tick += OnLongPressTick;
         UpdatePlaceholder();
     }
@@ -451,6 +462,8 @@ public partial class PanelWindow : Window
     /// </summary>
     public void PlaceAt(TaskbarInfo info)
     {
+        _anchorMode = AnchorMode.Taskbar;
+        _taskbarInfo = info;
         double scale = info.ScaleFactor;
 
         double TbLeft   = info.Bounds.Left   / scale;
@@ -464,7 +477,7 @@ public partial class PanelWindow : Window
         double WorkBottom = info.MonitorWorkArea.Bottom / scale;
 
         double w = Width;
-        double h = Height;
+        double h = GetContentHeight();
         double margin = 4;
 
         double left = TbLeft + 8;
@@ -510,14 +523,35 @@ public partial class PanelWindow : Window
             HidePanel();
             return;
         }
-        PlaceAt(info);
-        _shownAt = DateTime.Now;
+        _anchorMode = AnchorMode.Taskbar;   // 先记锚定，供 UpdateLayout 触发的 SizeChanged 重新定位
+        _taskbarInfo = info;
         Show();
+        UpdateLayout();   // 强制布局：SizeToContent 下 ActualHeight 此时才反映当前内容高度
+        PlaceAt(info);    // 用真实高度锚定，避免隐藏态旧高度导致定位偏低
+        _shownAt = DateTime.Now;
         Activate();
         SearchBox.Focus();
     }
 
-    public void HidePanel() => Hide();
+    public void HidePanel()
+    {
+        _vm?.RebuildDock();   // M7-D：收起面板时兜底刷新 Dock（拖拽重排/取消后确保最新）
+        Hide();
+    }
+
+    /// <summary>
+    /// 取面板真实内容高度，用于 Dock / 任务栏锚定。
+    /// SizeToContent=Height 下：窗体处于隐藏态时 ActualHeight 仍是上一次显示时的旧值
+    /// （WPF 对 Visibility=Hidden 不刷新布局），若面板内容变高会偏小，导致定位偏低盖住 Dock。
+    /// 故：已可见时直接读 ActualHeight；隐藏时强制对内容重新 Measure 取当前高度，并受窗口 MaxHeight 限制。
+    /// </summary>
+    private double GetContentHeight()
+    {
+        // 窗口高度已固定（见 XAML Height="640"），直接返回窗口高度：
+        // ① 避免隐藏态按内容期望高度（收藏少时偏小）算锚点，导致面板实际更高而盖住 Dock；
+        // ② 搜索/筛选时窗口高度不变，输入框与面板位置稳定，不再跳动。
+        return Height;
+    }
 
     /// <summary>
     /// 在指定屏幕点（WPF 逻辑坐标）正上方弹出面板，水平居中于该点。
@@ -525,7 +559,10 @@ public partial class PanelWindow : Window
     /// </summary>
     public void PositionAbove(double anchorCenterLogicalX, double anchorCenterLogicalY)
     {
-        double w = Width, h = Height;
+        _anchorMode = AnchorMode.Dock;
+        _dockAnchorX = anchorCenterLogicalX;
+        _dockAnchorY = anchorCenterLogicalY;
+        double w = Width, h = GetContentHeight();
         double left = anchorCenterLogicalX - w / 2;
         double top = anchorCenterLogicalY - h - 8;
 
@@ -543,12 +580,53 @@ public partial class PanelWindow : Window
     }
 
     /// <summary>
-    /// 面板失焦不再自动隐藏。开合完全由 Dock 中心按钮 / Esc / 点击启动统一控制，
-    /// 从根本上消除“点中心按钮→面板失焦先 Hide→按钮 Click 又 Show”导致无法收起的竞态。
-    /// （设计取舍：点击桌面/其它窗口不再自动收起面板，需再点中心按钮或按 Esc 关闭。）
+    /// 内容高度变化（如搜索筛选使结果变少/清空搜索使结果变多）时，面板 SizeToContent 改了高度，
+    /// 但 Top 未变会导致底边下移盖住 Dock。此处按记录的锚定方式重新定位，使底边保持贴住
+    /// Dock 顶部 / 任务栏上沿（高度变大→向上长，高度变小→整体略微下移但底边不动）。
+    /// </summary>
+    private void OnSizeChanged(object? sender, SizeChangedEventArgs e)
+    {
+        if (!IsVisible || _anchorMode == AnchorMode.None || _reanchoring) return;
+        _reanchoring = true;
+        try
+        {
+            if (_anchorMode == AnchorMode.Dock)
+                PositionAbove(_dockAnchorX, _dockAnchorY);
+            else if (_anchorMode == AnchorMode.Taskbar && _taskbarInfo is not null)
+                PlaceAt(_taskbarInfo);
+        }
+        finally
+        {
+            _reanchoring = false;
+        }
+    }
+
+    /// <summary>
+    /// 面板失焦即收起（拖拽收藏中除外）。不依赖“按下标记”时序：改用前台窗口判定——
+    /// 若失焦后前台仍是本进程（即点到了 Dock 的中心按钮 / 收藏图标 / 「+」），不收起，
+    /// 交给中心按钮抬起的 OnCenterButtonUp 决定开合，避免“点按钮失焦先收起、抬起又重开”的竞态；
+    /// 若失焦到别的进程（其它应用 / 桌面 / 任务栏），正常收起，也直接解决
+    /// “面板开着、Dock 被应用盖住时点不到中心按钮关闭”的卡死（从别处开应用即失焦收起）。
     /// </summary>
     private void OnDeactivated(object? sender, EventArgs e)
     {
-        if (_favoriteDragInProgress) CancelPress(); // 拖拽中失焦：先取消，避免占位卡/鼠标捕获残留
+        if (_favoriteDragInProgress) { CancelPress(); return; }
+        if (IsForegroundOwnProcess()) return;   // 失焦到本进程 Dock：交给中心按钮抬起逻辑，不抢收
+        HidePanel();
+    }
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+
+    /// <summary>当前前台窗口是否属于本进程（即 Dock 窗体）。用于区分“点中心按钮”与“点别的程序”。</summary>
+    private static bool IsForegroundOwnProcess()
+    {
+        var fg = GetForegroundWindow();
+        if (fg == IntPtr.Zero) return false;
+        GetWindowThreadProcessId(fg, out uint pid);
+        return pid == Environment.ProcessId;
     }
 }
