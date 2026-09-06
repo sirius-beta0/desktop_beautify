@@ -4,8 +4,8 @@
         xmlns:core="clr-namespace:Launcher.Core;assembly=Launcher.Core"
         Title="关于 DesktopBeautify Launcher"
         Height="340" Width="440"
-        WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
-        WindowStyle="SingleBorderWindow"
+        WindowStartupLocation="CenterScreen" ResizeMode="NoResize"
+        WindowStyle="SingleBorderWindow" Topmost="True"
         Background="White" FontFamily="Segoe UI, Microsoft YaHei UI, sans-serif"
         FontSize="13">
 

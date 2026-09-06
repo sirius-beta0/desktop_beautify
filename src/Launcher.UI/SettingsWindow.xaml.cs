@@ -15,7 +15,6 @@ public partial class SettingsWindow : Window
         InitializeComponent();
         _settings = (AppSettings)Application.Current.Resources["AppSettings"]!;
         DataContext = _settings;
-        Owner = Application.Current.MainWindow;
     }
 
     // ---- 中心按钮图标 ----

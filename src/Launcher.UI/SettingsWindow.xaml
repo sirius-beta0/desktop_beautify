@@ -4,8 +4,8 @@
         xmlns:conv="clr-namespace:Launcher.UI.Converters"
         Title="设置"
         Height="470" Width="460"
-        WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
-        WindowStyle="SingleBorderWindow"
+        WindowStartupLocation="CenterScreen" ResizeMode="NoResize"
+        WindowStyle="SingleBorderWindow" Topmost="True"
         Background="White" FontFamily="Segoe UI, Microsoft YaHei UI, sans-serif"
         FontSize="13"
         PreviewKeyDown="OnPreviewKeyDown">
