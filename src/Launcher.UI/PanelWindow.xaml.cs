@@ -2,6 +2,7 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using Launcher.Core;
 using Launcher.Core.Indexing;
 using Launcher.Core.Platform;
@@ -10,8 +11,8 @@ namespace Launcher.UI;
 
 public partial class PanelWindow : Window
 {
-    private bool _everActivated;
     private PanelViewModel? _vm;
+    private DateTime _shownAt = DateTime.MinValue;
 
     public PanelViewModel ViewModel
     {
@@ -32,7 +33,6 @@ public partial class PanelWindow : Window
             if (e.Key == Key.Escape) HidePanel();
         };
         Deactivated += OnDeactivated;
-        Activated += (_, _) => _everActivated = true;
         Loaded += (_, _) => SearchBox.Focus();
         UpdatePlaceholder();
     }
@@ -74,6 +74,36 @@ public partial class PanelWindow : Window
         if (sender is not FrameworkElement fe || fe.DataContext is not AppEntry app) return;
         AppLauncher.Launch(app);
         HidePanel();
+    }
+
+    /// <summary>
+    /// 单个网格项加载时异步提取 256px 真图标。提取成功则覆盖占位并隐藏首字母
+    /// （否则透明图标会透出下方的占位字母与底色）；提取失败保留首字母占位。
+    /// </summary>
+    private async void OnTileLoaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.Image img || img.DataContext is not AppEntry app) return;
+        var icon = await IconExtractor.GetAsync(app.Id, app.TargetPath ?? app.IconPath ?? "").ConfigureAwait(true);
+        if (img.DataContext != app) return;
+        if (icon is null) return;
+        img.Source = icon;
+        var placeholder = FindChildBorder((Grid)img.Parent, "Placeholder");
+        if (placeholder is not null) placeholder.Visibility = Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// 在视觉树中按 Tag 查找第一个匹配的 Border（用于隐藏占位层）。
+    /// </summary>
+    private static Border? FindChildBorder(DependencyObject parent, object tag)
+    {
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, i);
+            if (child is Border b && Equals(b.Tag, tag)) return b;
+            var nested = FindChildBorder(child, tag);
+            if (nested is not null) return nested;
+        }
+        return null;
     }
 
     /// <summary>
@@ -141,17 +171,21 @@ public partial class PanelWindow : Window
             return;
         }
         PlaceAt(info);
+        _shownAt = DateTime.Now;
         Show();
         Activate();
-        _everActivated = false;   // 重置，下次 Deactivated 由本次激活算起
         SearchBox.Focus();
     }
 
     public void HidePanel() => Hide();
 
+    /// <summary>
+    /// 面板失焦即隐藏，但显示后的极短时间内忽略 Deactivated，
+    /// 避免 Show/Activate 过程中系统瞬间切走焦点导致误关闭。
+    /// </summary>
     private void OnDeactivated(object? sender, EventArgs e)
     {
-        if (!_everActivated) return;
+        if (DateTime.Now - _shownAt < TimeSpan.FromMilliseconds(200)) return;
         HidePanel();
     }
 }

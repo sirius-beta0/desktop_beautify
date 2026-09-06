@@ -4,7 +4,7 @@
         xmlns:core="clr-namespace:Launcher.Core.Indexing;assembly=Launcher.Core"
         xmlns:local="clr-namespace:Launcher.UI"
         xmlns:conv="clr-namespace:Launcher.UI.Converters"
-        Width="640" Height="480"
+        Width="572" Height="560"
         WindowStyle="None" ResizeMode="NoResize"
         AllowsTransparency="True" Background="Transparent"
         ShowInTaskbar="False"
@@ -17,20 +17,45 @@
     <Window.Resources>
         <conv:FirstCharConverter x:Key="FirstCharConverter"/>
         <DataTemplate x:Key="AppItemTemplate" DataType="{x:Type core:AppEntry}">
-            <StackPanel Width="84" Margin="4" Cursor="Hand"
-                        MouseLeftButtonUp="OnAppLaunch">
-                <Border Width="48" Height="48" CornerRadius="10"
-                        Background="#D7E3F4" HorizontalAlignment="Center">
-                    <TextBlock Text="{Binding Name, Converter={StaticResource FirstCharConverter}}"
-                               FontSize="20" FontWeight="SemiBold" Foreground="#3B6BB5"
-                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                </Border>
+            <!-- 方型磁贴卡片：图标完全居中，名称置于底部，悬浮整卡加深 -->
+            <Grid Width="128" Height="128" Margin="0" Cursor="Hand"
+                  MouseLeftButtonUp="OnAppLaunch">
+                <!-- 图标在卡片内上下左右完全居中 -->
+                <Grid HorizontalAlignment="Center" VerticalAlignment="Center"
+                      Width="48" Height="48">
+                    <!-- 占位：图标未加载（异步/失败）时显示首字母；透明底，加载成功后由代码隐藏 -->
+                    <Border Tag="Placeholder">
+                        <TextBlock Text="{Binding Name, Converter={StaticResource FirstCharConverter}}"
+                                   FontSize="28" FontWeight="SemiBold" Foreground="#3B6BB5"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <!-- 真图标：透明 PNG，叠在占位之上 -->
+                    <Image x:Name="IconImg" Stretch="Uniform"
+                           Width="48" Height="48"
+                           RenderOptions.BitmapScalingMode="HighQuality"
+                           Loaded="OnTileLoaded"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Grid>
+                <!-- 名称置于卡片底部 -->
                 <TextBlock Text="{Binding Name}"
-                           Margin="0,6,0,0" FontSize="11" Foreground="#333"
+                           HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                           Margin="0,0,0,12" FontSize="11" Foreground="#333"
                            TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"
-                           HorizontalAlignment="Center" MaxWidth="80"
-                           ToolTip="{Binding Name}"/>
-            </StackPanel>
+                           MaxWidth="120" ToolTip="{Binding Name}"/>
+                <!-- 悬浮加深层：覆盖整张卡片（方型无圆角），hover 时整卡加深 -->
+                <Border>
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Background" Value="Transparent"/>
+                            <Style.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter Property="Background" Value="#1A000000"/>
+                                </Trigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                </Border>
+            </Grid>
         </DataTemplate>
     </Window.Resources>
 

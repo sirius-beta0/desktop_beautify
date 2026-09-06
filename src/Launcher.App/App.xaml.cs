@@ -78,8 +78,9 @@ public partial class App : Application
 
     private NotifyIcon BuildTray()
     {
-        var exe = Assembly.GetExecutingAssembly().Location;
-        var icon = Icon.ExtractAssociatedIcon(exe) ?? SystemIcons.Application;
+        // 单文件发布下 Assembly.Location 为空，故用进程主模块路径取 exe（单文件安全）
+        var exePath = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName;
+        var icon = (exePath is not null ? Icon.ExtractAssociatedIcon(exePath) : null) ?? SystemIcons.Application;
 
         var tray = new NotifyIcon
         {
