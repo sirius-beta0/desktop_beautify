@@ -1,8 +1,7 @@
 # DesktopBeautify（桌面美化）
 
-> Windows 桌面美化与效率工具 —— 可固定到任务栏的轻量应用启动器（同类参照 Wox / Flow Launcher / Listary）。
+> Windows11 桌面美化与效率工具。傻瓜式使用，无需额外配置，类win10开始栏磁贴。
 
-<!-- 图片占位：在此插入产品主界面 / 效果截图，建议路径 assets/screenshots/preview.png -->
 ![产品预览](assets/screenshots/preview.png)
 
 **当前版本：v0.1.0**（首个预览版）
@@ -19,14 +18,14 @@
 - **任务栏锚定** —— 面板从任务栏边缘弹出，适配多屏与不同任务栏位置
 - **两种唤起** —— 点击任务栏图标，或启用全局热键（`Ctrl+Alt+Space`，可选，默认关闭）
 
-<!-- 图片占位：在此插入「搜索面板 / 收藏网格」截图，建议路径 assets/screenshots/panel.png -->
 
 ### 常驻 Dock 栏
-- 桌面底部常驻的透明 Dock（不挡应用、不进 Alt+Tab）
+- 桌面底部常驻的透明 Dock
 - 中心按钮点击展开 / 收起搜索面板
-- 收藏应用左右对称排布，靠近中心按钮越近、悬浮放大
+- 收藏应用左右对称排布，悬浮放大
 
-<!-- 图片占位：在此插入「Dock 栏」截图，建议路径 assets/screenshots/dock.png -->
+![产品预览](assets/screenshots/snipaste_dock.png)
+
 
 ### 面板磁贴右键菜单
 - **收藏 / 取消收藏**
@@ -34,6 +33,11 @@
 - **以管理员身份运行** —— 走 UAC 提权（UWP 无 exe 时自动禁用）
 - **移到前面** —— 已收藏项一键置顶，并联动刷新 Dock 顺序
 
+![产品预览](assets/screenshots/snipaste_mune.png)
+![产品预览](assets/screenshots/snipaste_mune1.png)
+![产品预览](assets/screenshots/snipaste_mune2.png)
+![产品预览](assets/screenshots/snipaste_mune3.png)
+![产品预览](assets/screenshots/snipaste_mune4.png)
 ### 桌面图标管理（F18）
 - 一键隐藏 / 显示桌面图标，走系统官方 API（与右键「显示桌面图标」同源）
 - 仅自动恢复「本程序隐藏」的图标，尊重你在系统右键菜单里的手动设置，不打架
@@ -44,8 +48,7 @@
 - Dock 图标尺寸调节（24–56）
 - 中心按钮自定义图标 + 裁剪
 
-<!-- 图片占位：在此插入「设置页 / 关于页」截图，建议路径 assets/screenshots/settings.png -->
-
+![产品预览](assets/screenshots/snipaste_setup.png)
 ---
 
 ## 打包与构建
@@ -85,9 +88,7 @@ dotnet publish src/Launcher.App/Launcher.App.csproj -c Release -r win-x64 --self
 
 | 版本 | 日期 | 说明 |
 | --- | --- | --- |
-| **v0.1.0** | 2026-09 | 首个预览版：应用启动器 + 常驻 Dock 栏 + 面板右键菜单（打开文件位置 / 管理员运行 / 移到前面）+ 桌面图标隐藏 + 设置页 + 第三方开源声明 |
-
-<!-- 图片占位：在此插入版本更新配图（可选），建议路径 assets/screenshots/changelog.png -->
+| **v0.1.0** | 2026-09 | 首个预览版：应用启动器 + 常驻 Dock 栏 + 桌面图标隐藏 + 设置页|
 
 ---
 
@@ -95,8 +96,8 @@ dotnet publish src/Launcher.App/Launcher.App.csproj -c Release -r win-x64 --self
 
 如果这个工具对你有帮助，欢迎请作者喝杯咖啡 ☕
 
-<!-- 图片占位：在此插入微信 / 支付宝收款码，建议路径 assets/screenshots/donate.png -->
-![打赏收款码](assets/screenshots/donate.png)
+
+![打赏收款码](assets/screenshots/donate.jpg)
 
 ---
 
