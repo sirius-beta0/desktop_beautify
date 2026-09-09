@@ -39,6 +39,12 @@
                     <TextBlock Text="显示 Dock 栏" VerticalAlignment="Center"/>
                     <CheckBox DockPanel.Dock="Right" IsChecked="{Binding ShowDock}" VerticalAlignment="Center"/>
                 </DockPanel>
+                <DockPanel Margin="0,10,0,4">
+                    <TextBlock Text="隐藏桌面图标" VerticalAlignment="Center"/>
+                    <CheckBox DockPanel.Dock="Right" IsChecked="{Binding HideDesktopIcons}" VerticalAlignment="Center"/>
+                </DockPanel>
+                <TextBlock Text="启动后隐藏桌面上的全部图标；关闭开关或退出程序时自动恢复"
+                           Foreground="#999" FontSize="11" Margin="0,2,0,4" TextWrapping="Wrap"/>
 
                 <Rectangle Height="1" Fill="#ECECEC" Margin="0,12,0,12"/>
 

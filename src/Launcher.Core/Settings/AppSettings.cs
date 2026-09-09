@@ -39,6 +39,8 @@ public sealed class AppSettings : INotifyPropertyChanged
     private double _dockIconSize = 32;
     private bool _showDock = true;
     private PanelPosition _panelPosition = PanelPosition.BottomLeft;
+    private bool _hideDesktopIcons;
+    private bool _iconsHiddenByApp;
 
     public bool HotkeyEnabled
     {
@@ -92,6 +94,25 @@ public sealed class AppSettings : INotifyPropertyChanged
         set => Set(ref _panelPosition, value);
     }
 
+    /// <summary>是否隐藏桌面全部图标（默认 false）。打开后启动程序即隐藏，关闭则恢复。</summary>
+    public bool HideDesktopIcons
+    {
+        get => _hideDesktopIcons;
+        set => Set(ref _hideDesktopIcons, value);
+    }
+
+    /// <summary>
+    /// 当前桌面图标是否由本程序隐藏（内部标记，不暴露到 UI）。
+    /// <para>FWF_NOICONS 由 explorer 持久化，程序崩溃时图标会残留隐藏；
+    /// 下次启动据此自愈恢复。仅当本标记为真时程序才会在退出/关闭开关时恢复，
+    /// 避免覆盖用户在系统右键菜单里的手动设置。</para>
+    /// </summary>
+    public bool IconsHiddenByApp
+    {
+        get => _iconsHiddenByApp;
+        set => Set(ref _iconsHiddenByApp, value);
+    }
+
     public event PropertyChangedEventHandler? PropertyChanged;
 
     private void Set<T>(ref T field, T value, [CallerMemberName] string? name = null)
@@ -124,6 +145,8 @@ public sealed class AppSettings : INotifyPropertyChanged
             if (doc.DockIconSize is double s) DockIconSize = s;
             if (doc.ShowDock is bool sd) ShowDock = sd;
             if (doc.PanelPosition is PanelPosition p) PanelPosition = p;
+            if (doc.HideDesktopIcons is bool hdi) HideDesktopIcons = hdi;
+            if (doc.IconsHiddenByApp is bool ihba) IconsHiddenByApp = ihba;
         }
         catch
         {
@@ -147,6 +170,8 @@ public sealed class AppSettings : INotifyPropertyChanged
                 DockIconSize = DockIconSize,
                 ShowDock = ShowDock,
                 PanelPosition = PanelPosition,
+                HideDesktopIcons = HideDesktopIcons,
+                IconsHiddenByApp = IconsHiddenByApp,
             };
             var json = JsonSerializer.Serialize(doc,
                 new JsonSerializerOptions { WriteIndented = true });
@@ -168,5 +193,7 @@ public sealed class AppSettings : INotifyPropertyChanged
         public double? DockIconSize { get; set; }
         public bool? ShowDock { get; set; }
         public PanelPosition? PanelPosition { get; set; }
+        public bool? HideDesktopIcons { get; set; }
+        public bool? IconsHiddenByApp { get; set; }
     }
 }

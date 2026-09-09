@@ -112,6 +112,19 @@ public sealed partial class PanelViewModel : ObservableObject
         Rebuild();
     }
 
+    /// <summary>
+    /// 把已收藏项移到收藏列表最前（右键菜单「移到前面」）。
+    /// 未收藏或已是首位的项不做处理；Move 内部会落盘，Rebuild 会同步刷新 Dock 顺序。
+    /// </summary>
+    public void MoveFavoriteToFront(AppEntry app)
+    {
+        if (_store is null) return;
+        var idx = _store.IndexOf(app.Id);
+        if (idx <= 0) return;      // 未收藏(-1) 或 已是首位(0)
+        _store.Move(idx, 0);
+        Rebuild();
+    }
+
     // ---- 收藏区两两交换拖拽（M5 优化：占位卡始终跟随光标所在槽位）----
     private List<string>? _dragOriginalOrder;   // 拖拽开始时的收藏顺序快照（原始下标基准）
     private string? _dragSourceId;

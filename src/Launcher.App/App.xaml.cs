@@ -87,6 +87,9 @@ public partial class App : Application
 
         // 按当前配置注册全局热键（Dock 句柄已在 Show 后就绪）
         _dock.ApplyHotkeySettings(_settings);
+
+        // 桌面图标显隐：按设置同步（含崩溃残留自愈）
+        _ = SyncDesktopIconsAsync();
     }
 
     private async Task ScanAppsAsync()
@@ -156,6 +159,8 @@ public partial class App : Application
             if (_settings.ShowDock) _dock.Show();
             else _dock.Hide();
         }
+        else if (e.PropertyName == nameof(AppSettings.HideDesktopIcons) && _settings is not null)
+            _ = ApplyDesktopIconsSettingAsync(_settings.HideDesktopIcons);
     }
 
     private static void ApplyRunAtStartup(bool enable)
@@ -175,6 +180,34 @@ public partial class App : Application
         {
             // 注册表写入失败（极少）忽略，下次再试
         }
+    }
+
+    /// <summary>
+    /// 按设置同步桌面图标状态（F18）。
+    /// 开关打开 → 隐藏；开关关闭但上次由本程序隐藏（崩溃残留）→ 自愈恢复；
+    /// 开关关闭且非本程序隐藏 → 不动作，尊重用户在系统右键菜单里的手动设置。
+    /// </summary>
+    private async Task SyncDesktopIconsAsync()
+    {
+        if (_settings is null) return;
+        if (_settings.HideDesktopIcons)
+        {
+            if (await DesktopIconService.SetIconsHiddenAsync(true))
+                _settings.IconsHiddenByApp = true;
+        }
+        else if (_settings.IconsHiddenByApp)
+        {
+            if (await DesktopIconService.SetIconsHiddenAsync(false))
+                _settings.IconsHiddenByApp = false;
+        }
+    }
+
+    /// <summary>设置页开关切换：立即隐藏 / 恢复桌面图标。</summary>
+    private async Task ApplyDesktopIconsSettingAsync(bool hide)
+    {
+        if (_settings is null) return;
+        if (await DesktopIconService.SetIconsHiddenAsync(hide))
+            _settings.IconsHiddenByApp = hide;
     }
 
     // ---- 设置 / 关于窗口（单例）----
@@ -269,6 +302,13 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        // 退出时恢复桌面图标（仅当本次是由本程序隐藏的），避免留下"图标凭空消失"的孤儿状态。
+        // 崩溃时走不到这里，由下次启动的 SyncDesktopIconsAsync 依据 IconsHiddenByApp 自愈。
+        if (_settings is { IconsHiddenByApp: true })
+        {
+            if (DesktopIconService.SetIconsHidden(false, maxAttempts: 2))
+                _settings.IconsHiddenByApp = false;
+        }
         _tray?.Dispose();
         _pipeServer?.Dispose();
         _mutex?.Dispose();

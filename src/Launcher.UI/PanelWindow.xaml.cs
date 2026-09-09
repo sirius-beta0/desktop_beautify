@@ -160,28 +160,83 @@ public partial class PanelWindow : Window
 
     // ---- 收藏：右键菜单 / 拖拽排序 ----
 
-    /// <summary>右键菜单打开时，按当前项是否为收藏来设置菜单文案，并仅在失效收藏时显示「移除」。</summary>
+    // 菜单项下标（与 PanelWindow.xaml 中 ContextMenu 的声明顺序一致）
+    private const int MenuIndexFavorite = 0;
+    private const int MenuIndexRemoveInvalid = 1;
+    private const int MenuIndexOpenLocation = 3;
+    private const int MenuIndexRunAsAdmin = 4;
+    private const int MenuIndexMoveToFront = 5;
+
+    /// <summary>右键菜单打开时，按当前项状态设置各菜单项的文案与可用性。</summary>
     private void OnCardContextMenuOpened(object sender, RoutedEventArgs e)
     {
         if (sender is not ContextMenu menu) return;
         if (menu.PlacementTarget is not FrameworkElement fe || fe.DataContext is not AppEntry app || _vm is null) return;
+        var isFav = _vm.IsFavorite(app);
 
-        if (menu.Items[0] is MenuItem favItem)
-            favItem.Header = _vm.IsFavorite(app) ? "取消收藏" : "收藏";
+        if (menu.Items[MenuIndexFavorite] is MenuItem favItem)
+            favItem.Header = isFav ? "取消收藏" : "收藏";
 
-        if (menu.Items[1] is MenuItem removeItem)
-            removeItem.Visibility = (!app.IsValid && _vm.IsFavorite(app))
+        if (menu.Items[MenuIndexRemoveInvalid] is MenuItem removeItem)
+            removeItem.Visibility = (!app.IsValid && isFav)
                 ? Visibility.Visible
                 : Visibility.Collapsed;
+
+        // 打开文件位置：无实体文件的条目（多数 UWP）无法定位
+        if (menu.Items[MenuIndexOpenLocation] is MenuItem locItem)
+            locItem.IsEnabled = AppLauncher.ResolveLocationPath(app) is not null;
+
+        // 管理员运行：UWP 没有可提权的 exe
+        if (menu.Items[MenuIndexRunAsAdmin] is MenuItem adminItem)
+            adminItem.IsEnabled = AppLauncher.CanRunAsAdmin(app);
+
+        // 移到前面：仅对已收藏项显示，且已在首位时禁用
+        if (menu.Items[MenuIndexMoveToFront] is MenuItem frontItem)
+        {
+            frontItem.Visibility = isFav ? Visibility.Visible : Visibility.Collapsed;
+            frontItem.IsEnabled = _vm.Favorites.IndexOf(app) > 0;
+        }
     }
 
     /// <summary>右键菜单「收藏 / 取消收藏 / 移除失效收藏」统一走切换。</summary>
     private void OnToggleFavoriteMenu(object sender, RoutedEventArgs e)
     {
-        if (sender is not MenuItem mi || mi.Parent is not ContextMenu cm) return;
-        if (cm.PlacementTarget is not FrameworkElement fe || fe.DataContext is not AppEntry app) return;
+        if (TryGetMenuApp(sender) is not AppEntry app) return;
         _vm?.ToggleFavorite(app);
         RefreshEmptyState();
+    }
+
+    /// <summary>右键菜单「打开文件位置」：在资源管理器中定位并选中该应用的文件。</summary>
+    private void OnOpenFileLocationMenu(object sender, RoutedEventArgs e)
+    {
+        if (TryGetMenuApp(sender) is not AppEntry app) return;
+        AppLauncher.OpenFileLocation(app);
+        HidePanel();
+    }
+
+    /// <summary>右键菜单「以管理员身份运行」：走 UAC 提权启动（UWP 会由菜单禁用兜底）。</summary>
+    private void OnRunAsAdminMenu(object sender, RoutedEventArgs e)
+    {
+        if (TryGetMenuApp(sender) is not AppEntry app) return;
+        AppLauncher.LaunchAsAdmin(app);
+        HidePanel();
+    }
+
+    /// <summary>右键菜单「移到前面」：把已收藏项移到收藏列表首位（同步刷新 Dock 顺序）。</summary>
+    private void OnMoveToFrontMenu(object sender, RoutedEventArgs e)
+    {
+        if (TryGetMenuApp(sender) is not AppEntry app) return;
+        _vm?.MoveFavoriteToFront(app);
+        RefreshEmptyState();
+    }
+
+    /// <summary>从菜单项回溯到它所属卡片绑定的 AppEntry。</summary>
+    private static AppEntry? TryGetMenuApp(object sender)
+    {
+        if (sender is not MenuItem mi) return null;
+        if (mi.Parent is not ContextMenu cm) return null;
+        if (cm.PlacementTarget is not FrameworkElement fe) return null;
+        return fe.DataContext as AppEntry;
     }
 
     private void OnFavoriteDragStart(object sender, MouseButtonEventArgs e)

@@ -25,6 +25,10 @@
                     <ContextMenu Opened="OnCardContextMenuOpened">
                         <MenuItem Header="收藏" Click="OnToggleFavoriteMenu"/>
                         <MenuItem Header="移除失效收藏" Click="OnToggleFavoriteMenu" Visibility="Collapsed"/>
+                        <Separator/>
+                        <MenuItem Header="打开文件位置" Click="OnOpenFileLocationMenu"/>
+                        <MenuItem Header="以管理员身份运行" Click="OnRunAsAdminMenu"/>
+                        <MenuItem Header="移到前面" Click="OnMoveToFrontMenu"/>
                     </ContextMenu>
                 </Grid.ContextMenu>
                 <!-- 占位卡背景：仅拖拽占位时显示（虚线空卡） -->
