@@ -75,6 +75,17 @@ if ($LASTEXITCODE -ne 0) {
     throw "dotnet publish failed (exit $LASTEXITCODE)"
 }
 
+# --- 2.5 copy license & third-party notices next to the exe (合规：随分发附带开源声明) ---
+foreach ($doc in @("LICENSE", "THIRD-PARTY-NOTICES.md")) {
+    $src = Join-Path $RepoRoot $doc
+    if (Test-Path $src) {
+        Copy-Item $src $PublishDir -Force
+        Write-Host "  included $doc" -ForegroundColor DarkGray
+    } else {
+        Write-Warning "Missing $doc at repo root; open-source notice will not ship in the zip."
+    }
+}
+
 # --- 3. zip (contents at archive root so it runs after extract) ---
 Write-Host "[2/3] Packaging $ZipName ..." -ForegroundColor Cyan
 Compress-Archive -Path (Join-Path $PublishDir "*") -DestinationPath $ZipPath -Force

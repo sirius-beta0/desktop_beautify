@@ -2,10 +2,11 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:core="clr-namespace:Launcher.Core;assembly=Launcher.Core"
+        xmlns:local="clr-namespace:Launcher.UI"
         Title="关于 DesktopBeautify Launcher"
-        Height="340" Width="440"
-        WindowStartupLocation="CenterScreen" ResizeMode="NoResize"
-        WindowStyle="SingleBorderWindow" Topmost="True"
+        Height="480" Width="480"
+        WindowStartupLocation="CenterScreen" ResizeMode="CanResize" Topmost="True"
+        MinHeight="360" MinWidth="420"
         Background="White" FontFamily="Segoe UI, Microsoft YaHei UI, sans-serif"
         FontSize="13">
 
@@ -33,31 +34,62 @@
 
         <Rectangle Grid.Row="2" Height="1" Fill="#E2E2E2" Margin="0,16,0,0"/>
 
-        <!-- 信息区 -->
-        <StackPanel Grid.Row="3" Margin="0,16,0,0">
-            <DockPanel Margin="0,6">
-                <TextBlock Text="作者" Width="80" Foreground="#888"/>
-                <TextBlock Text="{x:Static core:AppInfo.Author}" Foreground="#1F1F1F"/>
-            </DockPanel>
-            <DockPanel Margin="0,6">
-                <TextBlock Text="开源协议" Width="80" Foreground="#888"/>
-                <TextBlock Text="{x:Static core:AppInfo.LicenseFullName}" Foreground="#1F1F1F"/>
-            </DockPanel>
-            <DockPanel Margin="0,6">
-                <TextBlock Text="项目地址" Width="80" Foreground="#888"/>
-                <TextBlock>
-                    <Hyperlink x:Name="GitHubLink"
-                               RequestNavigate="OnGitHubNavigate"
-                               ToolTip="{x:Static core:AppInfo.GitHubUrl}">
-                        <Run Text="{x:Static core:AppInfo.GitHubUrl}"/>
-                    </Hyperlink>
+        <!-- 信息区（可滚动，避免内容被截断） -->
+        <ScrollViewer Grid.Row="3" Margin="0,16,0,0"
+                      VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel>
+                <DockPanel Margin="0,6">
+                    <TextBlock Text="作者" Width="80" Foreground="#888"/>
+                    <TextBlock Text="{x:Static core:AppInfo.Author}" Foreground="#1F1F1F"/>
+                </DockPanel>
+                <DockPanel Margin="0,6">
+                    <TextBlock Text="开源协议" Width="80" Foreground="#888"/>
+                    <TextBlock Text="{x:Static core:AppInfo.LicenseFullName}" Foreground="#1F1F1F"/>
+                </DockPanel>
+                <DockPanel Margin="0,6">
+                    <TextBlock Text="项目地址" Width="80" Foreground="#888"/>
+                    <TextBlock>
+                        <Hyperlink x:Name="GitHubLink"
+                                   RequestNavigate="OnGitHubNavigate"
+                                   ToolTip="{x:Static core:AppInfo.GitHubUrl}">
+                            <Run Text="{x:Static core:AppInfo.GitHubUrl}"/>
+                        </Hyperlink>
+                    </TextBlock>
+                </DockPanel>
+                <TextBlock Margin="0,14,0,0" TextWrapping="Wrap" Foreground="#666" LineHeight="20">
+                    一款 Windows 桌面美化 / 效率工具：常驻 Dock 栏 + 可固定到任务栏的轻量应用启动器。
+                    基于 .NET 8 与 WPF 构建，以 Apache-2.0 协议开源。
                 </TextBlock>
-            </DockPanel>
-            <TextBlock Margin="0,14,0,0" TextWrapping="Wrap" Foreground="#666" LineHeight="20">
-                一款 Windows 桌面美化 / 效率工具：常驻 Dock 栏 + 可固定到任务栏的轻量应用启动器。
-                基于 .NET 8 与 WPF 构建，以 Apache-2.0 协议开源。
-            </TextBlock>
-        </StackPanel>
+
+                <Rectangle Height="1" Fill="#E2E2E2" Margin="0,18,0,0"/>
+
+                <!-- 第三方开源组件 -->
+                <TextBlock Text="第三方开源组件" FontWeight="SemiBold" Foreground="#1F1F1F" Margin="0,14,0,4"/>
+                <TextBlock TextWrapping="Wrap" Foreground="#999" Margin="0,0,0,8">
+                    本项目在构建 / 发布时引用了以下开源组件（均为 MIT 许可证）：
+                </TextBlock>
+                <ItemsControl ItemsSource="{x:Static local:AboutWindow.ThirdParty}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Margin="0,5">
+                                <TextBlock Foreground="#1F1F1F">
+                                    <Run Text="{Binding Name}" FontWeight="SemiBold"/>
+                                    <Run Text="  v"/><Run Text="{Binding Version}"/>
+                                    <Run Text="  ·  "/><Run Text="{Binding License}"/>
+                                </TextBlock>
+                                <TextBlock Text="{Binding Copyright}" Foreground="#999" FontSize="11"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <TextBlock Margin="0,12,0,0" TextWrapping="Wrap" Foreground="#666">
+                    完整许可证文本与版权声明见
+                    <Hyperlink x:Name="NoticesLink" RequestNavigate="OnOpenNotices">THIRD-PARTY-NOTICES.md</Hyperlink>
+                    （随程序分发，或访问项目仓库）。
+                </TextBlock>
+            </StackPanel>
+        </ScrollViewer>
 
         <!-- 关闭 -->
         <Button Grid.Row="4" Content="关闭" Width="90" Height="32" HorizontalAlignment="Right"
